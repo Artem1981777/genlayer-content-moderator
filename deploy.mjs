@@ -1,0 +1,30 @@
+import { readFileSync, writeFileSync } from "node:fs";
+import { createClient, createAccount } from "genlayer-js";
+import { testnetBradbury } from "genlayer-js/chains";
+import { TransactionStatus } from "genlayer-js/types";
+
+const PRIVATE_KEY = process.env.PRIVATE_KEY;
+if (!PRIVATE_KEY) { throw new Error("PRIVATE_KEY not found. Run: node --env-file=.env deploy.mjs"); }
+
+const RULES = "No spam or advertising. No scams, phishing, or requests for private keys or seed phrases. No hate speech or harassment. No violence or threats. APPROVE compliant content, FLAG borderline content, REMOVE clear violations.";
+const CONTENT = "FREE CRYPTO!! Send 1 ETH to 0xGiveaway and get 10 ETH back instantly! Limited time only. DM me your wallet seed phrase now to claim your reward before it ends!!!";
+
+const source = readFileSync("contracts/moderator.py", "utf8");
+const code = new TextEncoder().encode(source);
+const account = createAccount(PRIVATE_KEY);
+const client = createClient({ chain: testnetBradbury, account });
+
+console.log("Deploying ContentModerator...");
+const txHash = await client.deployContract({ code, args: [RULES, CONTENT] });
+console.log("deploy tx:", txHash);
+await client.waitForTransactionReceipt({ hash: txHash, status: TransactionStatus.ACCEPTED, retries: 300 });
+const tx = await client.getTransaction({ hash: txHash });
+const address = tx?.txDataDecoded?.contractAddress ?? tx?.recipient;
+console.log("=== DEPLOY RESULT ===");
+console.log("txExecutionResultName:", tx?.txExecutionResultName);
+console.log("contract address:", address);
+const ok = (tx?.txExecutionResultName === "FINISHED" || tx?.txExecutionResultName === "FINISHED_WITH_RETURN");
+console.log(ok ? ">>> CLEAN DEPLOY OK" : ("!!! WARNING: execution not clean -> " + tx?.txExecutionResultName));
+writeFileSync("contract.txt", String(address));
+writeFileSync("deploy-tx.txt", String(txHash));
+console.log("saved address -> contract.txt");

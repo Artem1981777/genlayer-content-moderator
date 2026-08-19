@@ -1,0 +1,16 @@
+{
+  "name": "genlayer-content-moderator",
+  "version": "0.1.0",
+  "description": "AI content moderation Intelligent Contract on GenLayer: an LLM judges content against community rules and validators reach consensus on APPROVE/FLAG/REMOVE.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "deploy": "node --env-file=.env deploy.mjs",
+    "interact": "node --env-file=.env interact.mjs",
+    "test": "node --env-file=.env test.mjs"
+  },
+  "dependencies": {
+    "genlayer-js": "^1.1.8",
+    "viem": "^2.55.18"
+  }
+}

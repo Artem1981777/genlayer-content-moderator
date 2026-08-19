@@ -1,0 +1,30 @@
+name: CI
+
+# Static checks only. The behavioral suite (test.mjs) runs against live
+# Testnet Bradbury and needs a funded private key, so it is executed locally
+# and never in CI (no secrets in CI).
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  static-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Syntax-check the Intelligent Contract
+        run: python -m py_compile contracts/moderator.py
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Syntax-check client scripts
+        run: |
+          for f in deploy.mjs interact.mjs test.mjs; do
+            node --check "$f"
+          done
