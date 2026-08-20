@@ -1,6 +1,6 @@
 {
   "name": "genlayer-content-moderator",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "AI content moderation Intelligent Contract on GenLayer with on-chain appeals: an LLM judges content against community rules, validators reach consensus on APPROVE/FLAG/REMOVE, and verdicts can be contested.",
   "type": "module",
   "license": "MIT",
