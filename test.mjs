@@ -7,7 +7,6 @@ const PK = process.env.PRIVATE_KEY;
 if (!PK) { throw new Error("PRIVATE_KEY missing. Run: node --env-file=.env test.mjs"); }
 const source = readFileSync("contracts/moderator.py", "utf8");
 const code = new TextEncoder().encode(source);
-
 const RULES = "No spam or advertising. No scams, phishing, or requests for private keys or seed phrases. No hate speech or harassment. No violence or threats. APPROVE compliant content, FLAG borderline content, REMOVE clear violations.";
 const HARMFUL = "FREE CRYPTO!! Send 1 ETH to 0xGiveaway and get 10 ETH back instantly! DM me your wallet seed phrase now to claim before it ends!!!";
 const BENIGN = "Thanks everyone for the great meetup yesterday - really enjoyed the talks on rollups and consensus. Looking forward to the next one!";
@@ -15,12 +14,12 @@ const BENIGN = "Thanks everyone for the great meetup yesterday - really enjoyed 
 const account = createAccount(PK);
 const client = createClient({ chain: testnetBradbury, account });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
 let failed = 0;
 const pass = (n) => console.log("PASS -", n);
 const fail = (n, extra) => { console.log("FAIL -", n, extra ?? ""); failed++; };
 const read = (addr) => client.readContract({ address: addr, functionName: "get_state", args: [] });
 const isRevert = (r) => (r === "FINISHED_WITH_ERROR" || r === "REVERTED");
+const histLen = (s) => { try { return JSON.parse(s?.history || "[]").length; } catch { return 0; } };
 
 async function deploy(rules, content) {
   const h = await client.deployContract({ code, args: [rules, content] });
@@ -55,6 +54,15 @@ async function waitLeaves(addr, fromStatus) {
   }
   return s;
 }
+async function waitHistory(addr, minLen) {
+  let s;
+  for (let i = 0; i < 100; i++) {
+    s = await read(addr);
+    if (histLen(s) >= minLen) return s;
+    await sleep(3000);
+  }
+  return s;
+}
 
 console.log("### TEST 1: harmful content is moderated and not approved ###");
 const c1 = await deploy(RULES, HARMFUL);
@@ -84,6 +92,26 @@ console.log("### TEST 5: cannot moderate empty content ###");
 const c3 = await deploy(RULES, "");
 const r5 = await call(c3, "moderate", []);
 isRevert(r5) ? pass("moderate with empty content reverted") : fail("expected revert on empty content", r5);
+
+console.log("### TEST 6: appeal re-runs moderation and records history ###");
+const a1 = await call(c2, "appeal", ["I think this is fine, please reconsider."]);
+const s6 = await waitHistory(c2, 2);
+(!isRevert(a1) && s6?.status === "moderated" && histLen(s6) === 2 && ["APPROVE", "FLAG", "REMOVE"].includes(s6?.verdict)) ? pass("appeal processed, history has 2 rounds") : fail("appeal did not process as expected", JSON.stringify({ a1, status: s6?.status, hist: histLen(s6), verdict: s6?.verdict }));
+
+console.log("### TEST 7: appeal with empty note reverts ###");
+const r7 = await call(c1, "appeal", ["   "]);
+isRevert(r7) ? pass("empty appeal note reverted") : fail("expected revert on empty appeal note", r7);
+
+console.log("### TEST 8: cannot appeal before moderation ###");
+const c4 = await deploy(RULES, "Brand new pending content for the appeal-state guard test.");
+const r8 = await call(c4, "appeal", ["Trying to appeal too early."]);
+isRevert(r8) ? pass("appeal before moderation reverted") : fail("expected revert on early appeal", r8);
+
+console.log("### TEST 9: appeal limit enforced (max 2) ###");
+const a2 = await call(c2, "appeal", ["Second appeal, still think it is fine."]);
+await waitHistory(c2, 3);
+const a3 = await call(c2, "appeal", ["Third appeal should be blocked."]);
+(!isRevert(a2) && isRevert(a3)) ? pass("second appeal ok, third appeal capped") : fail("appeal cap not enforced", JSON.stringify({ a2, a3 }));
 
 console.log("=====================================");
 console.log(failed === 0 ? "ALL TESTS PASSED" : (failed + " TEST(S) FAILED"));

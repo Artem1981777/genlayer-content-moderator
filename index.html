@@ -19,11 +19,15 @@
   .k { color:var(--mut); font-size:12px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px; }
   .v { margin-bottom:16px; white-space:pre-wrap; word-break:break-word; }
   .badge { display:inline-block; padding:6px 14px; border-radius:999px; font-weight:700; font-size:15px; }
+  .b-sm { padding:2px 10px; font-size:12px; }
   .APPROVE { background:#0f2e1c; color:#4ade80; border:1px solid #1f6b41; }
   .FLAG { background:#3a2f08; color:#fbbf24; border:1px solid #7a5c12; }
   .REMOVE { background:#3a1113; color:#f87171; border:1px solid #7a2226; }
   .pending { background:#1c2230; color:#8b93a7; border:1px solid #2c3547; }
   .mut { color:var(--mut); font-size:13px; }
+  .hist { border-left:2px solid var(--line); margin:0 0 16px; padding:0 0 0 14px; }
+  .hrow { margin-bottom:12px; }
+  .hmeta { color:var(--mut); font-size:12px; margin-top:2px; }
   .foot { color:var(--mut); font-size:13px; margin-top:18px; }
   a { color:#7aa7ff; }
   code { background:#0f131b; padding:2px 6px; border-radius:6px; font-size:13px; }
@@ -32,14 +36,14 @@
 <body>
 <div class="wrap">
   <h1>🛡️ ContentModerator</h1>
-  <p class="sub">AI content moderation on GenLayer — read a moderation case live from Testnet Bradbury. No wallet needed.</p>
+  <p class="sub">AI content moderation on GenLayer with on-chain appeals — read a live moderation case from Testnet Bradbury. No wallet needed.</p>
   <div class="row">
-    <input id="addr" spellcheck="false" value="0x237fD615062d9C952659DC357eaA94B8Be1370DC">
+    <input id="addr" spellcheck="false" value="0xDB04fa7B220F34D222168f8708bCb350300D7C64">
     <button id="go">Read</button>
   </div>
   <div id="out" class="card"><div class="mut">Loading…</div></div>
   <div class="foot">
-    <b>How it works.</b> A contract stores community rules and a piece of content. On <code>moderate()</code>, each GenLayer validator asks an LLM to judge the content against the rules, and validators reach consensus on APPROVE / FLAG / REMOVE — recorded on-chain with a reason. This page only reads that state live.
+    <b>How it works.</b> A contract stores community rules and a piece of content. On <code>moderate()</code>, each GenLayer validator asks an LLM to judge the content against the rules, and validators reach consensus on APPROVE / FLAG / REMOVE — recorded on-chain with a reason. Anyone can <code>appeal()</code> a verdict for a fresh consensus round; the appeal note is treated as an untrusted claim. This page only reads that state live.
     <div style="margin-top:10px">Built on GenLayer • <a id="exlink" href="#" target="_blank">View on Explorer</a> • <a href="https://github.com/Artem1981777/genlayer-content-moderator" target="_blank">Source</a></div>
   </div>
 </div>
@@ -66,6 +70,24 @@ async function load() {
   }
 }
 
+function historyHtml(raw) {
+  let items = [];
+  try { items = JSON.parse(raw || "[]"); } catch { items = []; }
+  if (!Array.isArray(items) || items.length === 0) return "";
+  let rows = "";
+  for (const it of items) {
+    const v = it.verdict || "";
+    rows +=
+      '<div class="hrow">' +
+      '<span class="badge b-sm ' + (v || "pending") + '">' + esc(v || "PENDING") + '</span> ' +
+      '<span class="mut">round ' + esc(it.round) + ' · ' + esc(it.kind) + '</span>' +
+      '<div>' + esc(it.reason) + '</div>' +
+      (it.note ? '<div class="hmeta">appeal note: ' + esc(it.note) + '</div>' : '') +
+      '</div>';
+  }
+  return '<div class="k">History (on-chain)</div><div class="hist">' + rows + '</div>';
+}
+
 function render(st) {
   const status = st.status || "pending";
   const verdict = st.verdict || "";
@@ -77,6 +99,7 @@ function render(st) {
     (st.reason ? ('<div class="k">Reason</div><div class="v">' + esc(st.reason) + '</div>') : '') +
     '<div class="k">Content</div><div class="v">' + esc(st.content) + '</div>' +
     '<div class="k">Community rules</div><div class="v mut">' + esc(st.rules) + '</div>' +
+    historyHtml(st.history) +
     '<div class="k">Creator</div><div class="v mut">' + esc(st.creator) + '</div>';
 }
 
