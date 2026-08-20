@@ -67,3 +67,22 @@ See `docs/SECURITY-AUDIT.md`. Highlights: untrusted-content prompt isolation, sk
 ## License
 
 MIT
+
+## v0.4.0 — Verifiable content record + enforcement & appeal workflow
+This release addresses steward feedback: the moderation verdict is now bound to an authenticated platform item and consumed by a real enforcement + appeal workflow, tested on-chain.
+- Constructor records an authenticated content record: `rules`, `content`, `item_id`, `source`, `author`, and a sha256 `content_hash`.
+- Consequential, permissioned paths:
+  - `moderate` — AI consensus verdict (APPROVE / FLAG / REMOVE)
+  - `enforce` — applies the verdict (REMOVE blocks the item, FLAG limits it); `read_content` returns `[REMOVED BY CONSENSUS MODERATION]` when blocked
+  - `appeal(note)` — author disputes an enforced FLAG/REMOVE (max 2 appeals)
+  - `resolve_appeal` — re-runs consensus, sets OVERTURNED or UPHELD, updates enforcement
+- `verify_content(content)` proves tamper detection against the stored `content_hash`.
+- Full on-chain audit trail via `get_state().history`.
+
+### Live demo (Bradbury testnet)
+- Contract: `0x30Bb0bc6dA84d377C339949DDfF2d87539F77EB7`
+- moderate → REMOVE: `0x2dfc598349349a8cc69cf774ff8c07d95bfc9de3399a9a75f9faea022fc0f06c`
+- enforce → blocked: `0x50cd96099418f555d91b4e4d27288902940a1b7793780bb96a50dc434cb5bde4`
+- appeal (author): `0x8578d3e39d485c106d7e33ea35aa74793b441545ca9be70f09a4227219652e79`
+- resolve_appeal → UPHELD: `0x14fa4e5b4bfdd1eb488c31b2894391d5f65d2459e806112133f51c047e4513c5`
+- Explorer: https://explorer-bradbury.genlayer.com/address/0x30Bb0bc6dA84d377C339949DDfF2d87539F77EB7

@@ -2,20 +2,19 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { createClient, createAccount } from "genlayer-js";
 import { testnetBradbury } from "genlayer-js/chains";
 import { TransactionStatus } from "genlayer-js/types";
-
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 if (!PRIVATE_KEY) { throw new Error("PRIVATE_KEY not found. Run: node --env-file=.env deploy.mjs"); }
-
 const RULES = "No spam or advertising. No scams, phishing, or requests for private keys or seed phrases. No hate speech or harassment. No violence or threats. APPROVE compliant content, FLAG borderline content, REMOVE clear violations.";
 const CONTENT = "FREE CRYPTO!! Send 1 ETH to 0xGiveaway and get 10 ETH back instantly! Limited time only. DM me your wallet seed phrase now to claim your reward before it ends!!!";
-
+const ITEM_ID = "post-1001";
+const SOURCE = "genlayer-demo-forum";
+const AUTHOR = "";
 const source = readFileSync("contracts/moderator.py", "utf8");
 const code = new TextEncoder().encode(source);
 const account = createAccount(PRIVATE_KEY);
 const client = createClient({ chain: testnetBradbury, account });
-
-console.log("Deploying ContentModerator...");
-const txHash = await client.deployContract({ code, args: [RULES, CONTENT] });
+console.log("Deploying ContentModerator v0.4.0...");
+const txHash = await client.deployContract({ code, args: [RULES, CONTENT, ITEM_ID, SOURCE, AUTHOR] });
 console.log("deploy tx:", txHash);
 await client.waitForTransactionReceipt({ hash: txHash, status: TransactionStatus.ACCEPTED, retries: 300 });
 const tx = await client.getTransaction({ hash: txHash });
