@@ -1,0 +1,15 @@
+import { readFileSync } from "node:fs";
+import { createClient, createAccount } from "genlayer-js";
+import { testnetBradbury } from "genlayer-js/chains";
+const op = createAccount(process.env.PRIVATE_KEY);
+const c = createClient({ chain: testnetBradbury, account: op });
+const ADDRESS = readFileSync("cm-contract.txt", "utf8").trim();
+const st = await c.readContract({ address: ADDRESS, functionName: "get_state", args: [] });
+console.log("status:", st.status, "| verdict:", st.verdict, "| category:", st.category);
+console.log("appeal_outcome:", st.appeal_outcome, "| blocked:", st.blocked);
+console.log("author:", st.author);
+console.log("item_id:", st.item_id);
+console.log("source:", st.source);
+console.log("content_hash:", st.content_hash);
+console.log("=== HISTORY ===");
+console.log(st.history);

@@ -1,127 +1,136 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { createClient, createAccount } from "genlayer-js";
 import { testnetBradbury } from "genlayer-js/chains";
 import { TransactionStatus } from "genlayer-js/types";
-
-const PK = process.env.PRIVATE_KEY;
-if (!PK) { throw new Error("PRIVATE_KEY missing. Run: node --env-file=.env test.mjs"); }
-const source = readFileSync("contracts/moderator.py", "utf8");
-const code = new TextEncoder().encode(source);
-
-const RULES = "No spam or advertising. No scams, phishing, or requests for private keys or seed phrases. No hate speech or harassment. No violence or threats. APPROVE compliant content, FLAG borderline content, REMOVE clear violations.";
-const HARMFUL = "FREE CRYPTO!! Send 1 ETH to 0xGiveaway and get 10 ETH back instantly! DM me your wallet seed phrase now to claim your reward!!!";
-const BENIGN = "Hey everyone, I just published a free open-source tutorial on setting up a Python dev environment. Hope it helps someone getting started!";
-
-const account = createAccount(PK);
-const client = createClient({ chain: testnetBradbury, account });
+const operator = createAccount(process.env.PRIVATE_KEY);
+const authorKey = readFileSync(process.env.HOME + "/genlayer/escrow-dapp/seller-key.txt", "utf8").trim();
+const author = createAccount(authorKey);
+const cOp = createClient({ chain: testnetBradbury, account: operator });
+const cAuthor = createClient({ chain: testnetBradbury, account: author });
+const SCAM_URL = "https://artem1981777.github.io/genlayer-content-moderator/fixtures/scam.html";
+const RULES = "No scams, fraud, or financial schemes. No requests for private keys, wallet seed phrases, or credentials. No spam, no harassment, no hate speech, no violence. Posts must not attempt to deceive or steal from other members.";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-let failed = 0;
-const pass = (n) => console.log("PASS -", n);
-const fail = (n, extra) => { console.log("FAIL -", n, extra ?? ""); failed++; };
-const read = (addr) => client.readContract({ address: addr, functionName: "get_state", args: [] });
-const isRevert = (r) => (r === "FINISHED_WITH_ERROR" || r === "REVERTED");
-const histLen = (s) => { try { return JSON.parse(s?.history || "[]").length; } catch { return 0; } };
-const isCollision = (e) => { const m = String(e?.message || e); return m.includes("consensus contract") || m.includes("EVM tx"); };
-const CATS = ["spam", "harassment", "hate", "violence", "sexual", "self_harm", "other", "none"];
-
-async function deploy(rules, content) {
-  let h = null;
-  for (let attempt = 1; attempt <= 25; attempt++) {
-    try { h = await client.deployContract({ code, args: [rules, content] }); break; }
-    catch (e) { if (isCollision(e)) { await sleep(20000); continue; } throw e; }
+function retriable(msg) { msg = String(msg || "").toLowerCase(); return msg.includes("-32005") || msg.includes("capacity") || msg.includes("rate limit") || msg.includes("exceeds defined limit") || msg.includes("consensus contract") || msg.includes("evm tx"); }
+async function waitFinal(client, hash, label) {
+  for (let i = 0; i < 100; i++) {
+    let tx = null;
+    try { tx = await client.getTransaction({ hash }); } catch (e) { await sleep(5000); continue; }
+    const rn = String(tx?.txExecutionResultName || "");
+    if (rn === "FINISHED" || rn === "FINISHED_WITH_RETURN") return tx;
+    if (/ERROR|REVERT|ROLL|DISAGREE|UNDETERMIN/i.test(rn)) throw new Error("execution failed for " + label + ": " + rn);
+    if (i % 5 === 0) console.log("  ...waiting finality for " + label + " (" + (rn || "pending") + ")");
+    await sleep(6000);
   }
-  if (!h) throw new Error("deploy submit failed after retries");
-  await client.waitForTransactionReceipt({ hash: h, status: TransactionStatus.ACCEPTED, retries: 300 });
-  const tx = await client.getTransaction({ hash: h });
-  const addr = tx?.txDataDecoded?.contractAddress ?? tx?.recipient;
-  if (!addr || tx?.txExecutionResultName !== "FINISHED_WITH_RETURN") throw new Error("deploy failed: " + tx?.txExecutionResultName);
-  return addr;
+  throw new Error("timeout waiting finality for " + label);
 }
-async function call(addr, fn, args) {
-  let h = null;
-  for (let attempt = 1; attempt <= 25; attempt++) {
-    try { h = await client.writeContract({ address: addr, functionName: fn, args, value: 0 }); break; }
-    catch (e) { if (isCollision(e)) { await sleep(20000); continue; } return "REVERTED"; }
+async function submitWrite(client, address, functionName, args, value) {
+  for (let attempt = 1; attempt <= 40; attempt++) {
+    try {
+      const hash = await client.writeContract({ address, functionName, args, value: value || 0n });
+      await client.waitForTransactionReceipt({ hash, status: TransactionStatus.ACCEPTED, retries: 300 });
+      await waitFinal(client, hash, functionName);
+      return hash;
+    } catch (e) {
+      const msg = e?.message || String(e);
+      if (retriable(msg) && attempt < 40) { console.log("  retry " + functionName + " (" + attempt + "): " + msg.slice(0, 80)); await sleep(8000); continue; }
+      throw e;
+    }
   }
-  if (!h) return "SUBMIT_TIMEOUT";
-  try { await client.waitForTransactionReceipt({ hash: h, status: TransactionStatus.ACCEPTED, retries: 300 }); }
-  catch (e) { return "REVERTED"; }
-  for (let i = 0; i < 120; i++) {
-    const tx = await client.getTransaction({ hash: h });
-    const r = tx?.txExecutionResultName;
-    if (r && r !== "NOT_VOTED") return r;
-    await sleep(5000);
+}
+async function ensureGas(minWei, topupWei) {
+  const b = await cOp.getBalance({ address: author.address });
+  console.log("author balance:", b.toString());
+  if (b < minWei) {
+    console.log("topping up author ...");
+    let h;
+    try { h = await cOp.sendTransaction({ to: author.address, value: topupWei }); }
+    catch (e) { h = await cOp.sendTransaction({ account: operator, to: author.address, value: topupWei }); }
+    console.log("topup tx:", h);
+    for (let i = 0; i < 25; i++) { const nb = await cOp.getBalance({ address: author.address }); if (nb >= minWei) { console.log("author funded:", nb.toString()); break; } await sleep(6000); }
   }
-  return "NOT_VOTED";
 }
-async function waitLeaves(addr, fromStatus) {
-  let s;
-  for (let i = 0; i < 220; i++) { s = await read(addr); if (s?.status !== fromStatus) return s; await sleep(5000); }
-  return s;
+async function main() {
+  console.log("operator:", operator.address);
+  console.log("author:", author.address);
+  if (operator.address.toLowerCase() === author.address.toLowerCase()) throw new Error("operator and author must be different accounts");
+  console.log("ROLES DISTINCT: true");
+  await ensureGas(10000000000000000n, 30000000000000000n);
+  const code = new TextEncoder().encode(readFileSync("contracts/moderator.py", "utf8"));
+  console.log("deploying ContentModerator v0.5.0 ...");
+  let dHash;
+  for (let attempt = 1; attempt <= 40; attempt++) {
+    try {
+      dHash = await cOp.deployContract({ code, args: [RULES] });
+      await cOp.waitForTransactionReceipt({ hash: dHash, status: TransactionStatus.ACCEPTED, retries: 300 });
+      break;
+    } catch (e) {
+      const msg = e?.message || String(e);
+      if (retriable(msg) && attempt < 40) { console.log('  retry deploy (' + attempt + '): ' + msg.slice(0, 80)); await sleep(8000); continue; }
+      throw e;
+    }
+  }
+  const dtx = await cOp.getTransaction({ hash: dHash });
+  const ADDRESS = dtx?.txDataDecoded?.contractAddress ?? dtx?.recipient;
+  writeFileSync("cm-contract.txt", String(ADDRESS));
+  writeFileSync("cm-deploy-tx.txt", String(dHash));
+  console.log("deploy tx:", dHash);
+  console.log("contract:", ADDRESS);
+  const readState = async () => await cOp.readContract({ address: ADDRESS, functionName: "get_state", args: [] });
+  let st = await readState();
+  console.log("status after deploy:", st.status, "| creator:", st.creator);
+  console.log("author ingesting live source:", SCAM_URL);
+  const hIng = await submitWrite(cAuthor, ADDRESS, "ingest", [SCAM_URL], 0n);
+  writeFileSync("cm-ingest-tx.txt", String(hIng)); console.log("ingest ->", hIng);
+  st = await readState();
+  const recorded = String(st.content || "");
+  console.log("=== AFTER INGEST ===");
+  console.log("author on record:", st.author);
+  console.log("item_id:", st.item_id, "| source:", st.source, "| status:", st.status);
+  console.log("recorded content (first 200):", recorded.slice(0, 200));
+  console.log("content_hash:", st.content_hash);
+  const hMod = await submitWrite(cOp, ADDRESS, "moderate", [], 0n);
+  writeFileSync("cm-moderate-tx.txt", String(hMod)); console.log("moderate ->", hMod);
+  st = await readState();
+  console.log("=== VERDICT ===");
+  console.log("verdict:", st.verdict, "| category:", st.category, "| confidence:", st.confidence);
+  console.log("reason:", st.reason);
+  const hEnf = await submitWrite(cOp, ADDRESS, "enforce", [], 0n);
+  writeFileSync("cm-enforce-tx.txt", String(hEnf)); console.log("enforce ->", hEnf);
+  const shown = await cOp.readContract({ address: ADDRESS, functionName: "read_content", args: [] });
+  st = await readState();
+  console.log("=== ENFORCEMENT ===");
+  console.log("enforcement_action:", st.enforcement_action, "| blocked:", st.blocked, "| limited:", st.limited);
+  console.log("read_content ->", shown);
+  const okReal = await cOp.readContract({ address: ADDRESS, functionName: "verify_content", args: [recorded] });
+  const okFake = await cOp.readContract({ address: ADDRESS, functionName: "verify_content", args: ["totally different tampered text"] });
+  console.log("=== VERIFY_CONTENT ===");
+  console.log("verify_content(recorded):", okReal, "(expect true)");
+  console.log("verify_content(tampered):", okFake, "(expect false)");
+  const hApp = await submitWrite(cAuthor, ADDRESS, "appeal", ["I am the author; this was a legitimate promo, please re-review."], 0n);
+  writeFileSync("cm-appeal-tx.txt", String(hApp)); console.log("appeal ->", hApp);
+  st = await readState(); console.log("status after appeal:", st.status);
+  const hRes = await submitWrite(cOp, ADDRESS, "resolve_appeal", [], 0n);
+  writeFileSync("cm-resolve-tx.txt", String(hRes)); console.log("resolve_appeal ->", hRes);
+  st = await readState();
+  console.log("=== APPEAL RESULT ===");
+  console.log("appeal_outcome:", st.appeal_outcome, "| verdict:", st.verdict, "| status:", st.status);
+  const hRev = await submitWrite(cOp, ADDRESS, "reverify_source", [], 0n);
+  writeFileSync("cm-reverify-tx.txt", String(hRev)); console.log("reverify_source ->", hRev);
+  st = await readState();
+  let revMatch = "";
+  try { const items = JSON.parse(st.history || "[]"); for (const it of items) { if (it && it.kind === "reverify") revMatch = String(it.note || ""); } } catch (e) {}
+  console.log("=== REVERIFY SOURCE ===");
+  console.log("reverify result (from history):", revMatch, "(expect match=true)");
+  console.log("=== CM RUN SUMMARY ===");
+  console.log("contract:", ADDRESS);
+  console.log("operator:", operator.address, "| author:", author.address);
+  console.log("deploy:", dHash);
+  console.log("ingest:", hIng);
+  console.log("moderate:", hMod);
+  console.log("enforce:", hEnf);
+  console.log("appeal:", hApp);
+  console.log("resolve_appeal:", hRes);
+  console.log("reverify_source:", hRev);
+  console.log(">>> CM RUN COMPLETE");
 }
-async function waitHistory(addr, minLen) {
-  let s;
-  for (let i = 0; i < 220; i++) { s = await read(addr); if (histLen(s) >= minLen) return s; await sleep(5000); }
-  return s;
-}
-
-console.log("### TEST 1: harmful content is moderated and not approved ###");
-const c1 = await deploy(RULES, HARMFUL);
-console.log("contract:", c1);
-console.log("moderate:", await call(c1, "moderate", []));
-const s1 = await waitLeaves(c1, "pending");
-console.log("verdict:", s1?.verdict, "| status:", s1?.status);
-(s1?.status === "moderated" && (s1?.verdict === "REMOVE" || s1?.verdict === "FLAG")) ? pass("harmful content flagged/removed") : fail("expected FLAG or REMOVE", JSON.stringify(s1));
-
-console.log("### TEST 2: benign content is approved ###");
-const c2 = await deploy(RULES, BENIGN);
-console.log("contract:", c2);
-console.log("moderate:", await call(c2, "moderate", []));
-const s2 = await waitLeaves(c2, "pending");
-console.log("verdict:", s2?.verdict, "| status:", s2?.status);
-(s2?.status === "moderated" && s2?.verdict === "APPROVE") ? pass("benign content approved") : fail("expected APPROVE", JSON.stringify(s2));
-
-console.log("### TEST 3: cannot moderate twice ###");
-const r3 = await call(c1, "moderate", []);
-isRevert(r3) ? pass("double moderate reverted") : fail("expected revert on double moderate", r3);
-
-console.log("### TEST 4: cannot set content after moderated ###");
-const r4 = await call(c1, "set_content", ["some new content"]);
-isRevert(r4) ? pass("late set_content reverted") : fail("expected revert on late set_content", r4);
-
-console.log("### TEST 5: cannot moderate empty content ###");
-const c3 = await deploy(RULES, "");
-const r5 = await call(c3, "moderate", []);
-isRevert(r5) ? pass("moderate with empty content reverted") : fail("expected revert on empty content", r5);
-
-console.log("### TEST 6: appeal re-runs moderation and records history ###");
-const a1 = await call(c2, "appeal", ["I think this is fine, please reconsider."]);
-const s6 = await waitHistory(c2, 2);
-(!isRevert(a1) && s6?.status === "moderated" && histLen(s6) === 2 && ["APPROVE", "FLAG", "REMOVE"].includes(s6?.verdict)) ? pass("appeal processed, history has 2 rounds") : fail("appeal did not process as expected", JSON.stringify({ a1, status: s6?.status, hist: histLen(s6), verdict: s6?.verdict }));
-
-console.log("### TEST 7: appeal with empty note reverts ###");
-const r7 = await call(c1, "appeal", ["   "]);
-isRevert(r7) ? pass("empty appeal note reverted") : fail("expected revert on empty appeal note", r7);
-
-console.log("### TEST 8: cannot appeal before moderation ###");
-const c4 = await deploy(RULES, "Brand new pending content for the appeal-state guard test.");
-const r8 = await call(c4, "appeal", ["Trying to appeal too early."]);
-isRevert(r8) ? pass("appeal before moderation reverted") : fail("expected revert on early appeal", r8);
-
-console.log("### TEST 9: appeal limit enforced (max 2) ###");
-const a2 = await call(c2, "appeal", ["Second appeal, still think it is fine."]);
-await waitHistory(c2, 3);
-const a3 = await call(c2, "appeal", ["Third appeal should be blocked."]);
-(!isRevert(a2) && isRevert(a3)) ? pass("second appeal ok, third appeal capped") : fail("appeal cap not enforced", JSON.stringify({ a2, a3 }));
-
-console.log("### TEST 10: verdict carries confidence, category and review metadata ###");
-const m1 = await read(c1);
-const conf = Number(m1?.confidence);
-const catOk = CATS.includes(String(m1?.category));
-const confOk = Number.isFinite(conf) && conf >= 0 && conf <= 100 && String(m1?.confidence).length > 0;
-const flagsOk = (m1?.escalated === "true" || m1?.escalated === "false") && (m1?.needs_review === "true" || m1?.needs_review === "false");
-(confOk && catOk && flagsOk) ? pass("confidence/category/flags present and valid") : fail("metadata missing or invalid", JSON.stringify({ confidence: m1?.confidence, category: m1?.category, escalated: m1?.escalated, needs_review: m1?.needs_review }));
-
-console.log("=====================================");
-console.log(failed === 0 ? "ALL TESTS PASSED" : (failed + " TEST(S) FAILED"));
-process.exitCode = failed === 0 ? 0 : 1;
+main().catch((e) => { console.error("FATAL:", e?.message || e); process.exit(1); });

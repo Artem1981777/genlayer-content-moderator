@@ -1,61 +1,157 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { createClient, createAccount } from "genlayer-js";
 import { testnetBradbury } from "genlayer-js/chains";
 import { TransactionStatus } from "genlayer-js/types";
-const PRIVATE_KEY = process.env.PRIVATE_KEY;
-if (!PRIVATE_KEY) { throw new Error("PRIVATE_KEY not found. Run: node --env-file=.env resume.mjs"); }
-const CONTRACT = readFileSync("contract.txt", "utf8").trim();
-const CONTENT = "FREE CRYPTO!! Send 1 ETH to 0xGiveaway and get 10 ETH back instantly! Limited time only. DM me your wallet seed phrase now to claim your reward before it ends!!!";
-console.log("CONTRACT:", CONTRACT);
-const account = createAccount(PRIVATE_KEY);
-const client = createClient({ chain: testnetBradbury, account });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const read = () => client.readContract({ address: CONTRACT, functionName: "get_state", args: [] });
-const readContent = () => client.readContract({ address: CONTRACT, functionName: "read_content", args: [] });
-const verify = (c) => client.readContract({ address: CONTRACT, functionName: "verify_content", args: [c] });
-const ORDER = { pending: 0, moderated: 1, enforced: 2, appealed: 3, resolved: 4 };
-const retriable = (e) => { const m = String(e?.message || e); return m.includes("consensus contract") || m.includes("EVM tx") || m.includes("-32005") || m.includes("capacity") || m.includes("rate limit") || m.includes("exceeds defined limit"); };
-async function submitWrite(fn, args) {
-  for (let attempt = 1; attempt <= 40; attempt++) {
-    try { return await client.writeContract({ address: CONTRACT, functionName: fn, args, value: 0 }); }
-    catch (e) {
-      if (retriable(e)) { console.log("  node busy on " + fn + " (try " + attempt + "), retry in 8s..."); await sleep(8000); continue; }
+const HOME = process.env.HOME;
+const ADDRESS = readFileSync("cm-contract.txt", "utf8").trim();
+const SCAM_URL = "https://artem1981777.github.io/genlayer-content-moderator/fixtures/scam.html";
+const operator = createAccount(process.env.PRIVATE_KEY);
+const author = createAccount(readFileSync(HOME + "/genlayer/escrow-dapp/seller-key.txt", "utf8").trim());
+const cOp = createClient({ chain: testnetBradbury, account: operator });
+const cAuthor = createClient({ chain: testnetBradbury, account: author });
+function retriable(m) {
+  m = String(m || "");
+  return /-32005|capacity|rate limit|exceeds defined limit|consensus contract|evm tx|NOT_VOTED|timeout/i.test(m);
+}
+async function getState() {
+  for (let a = 1; a <= 40; a++) {
+    try {
+      return await cOp.readContract({ address: ADDRESS, functionName: "get_state", args: [] });
+    } catch (e) {
+      const msg = e?.message || String(e);
+      if (retriable(msg) && a < 40) { await sleep(6000); continue; }
       throw e;
     }
   }
-  throw new Error("submit failed after retries: " + fn);
 }
-async function waitStatus(target, tries) {
-  let s;
-  for (let i = 0; i < tries; i++) { s = await read(); if (s?.status === target) return s; await sleep(5000); }
-  return s;
+async function submitWrite(client, functionName, args = []) {
+  for (let a = 1; a <= 60; a++) {
+    try {
+      const h = await client.writeContract({ address: ADDRESS, functionName, args });
+      await client.waitForTransactionReceipt({ hash: h, status: TransactionStatus.ACCEPTED, retries: 300 });
+      return h;
+    } catch (e) {
+      const msg = e?.message || String(e);
+      if (retriable(msg) && a < 60) { console.log("  retry " + functionName + " (" + a + "): " + msg.slice(0, 80)); await sleep(8000); continue; }
+      throw e;
+    }
+  }
 }
-async function step(fn, args, target, outfile) {
-  let s = await read();
-  if ((ORDER[s?.status] ?? -1) >= ORDER[target]) { console.log("skip " + fn + " (already " + s?.status + ")"); return; }
-  console.log("--- " + fn + " ---");
-  const h = await submitWrite(fn, args);
-  console.log(fn + " tx:", h);
-  if (outfile) writeFileSync(outfile, String(h));
-  await client.waitForTransactionReceipt({ hash: h, status: TransactionStatus.ACCEPTED, retries: 300 });
-  console.log("  waiting for " + fn + " to COMMIT (status -> " + target + ")...");
-  s = await waitStatus(target, 260);
-  if (!s || s.status !== target) { console.log("!!! " + fn + " DID NOT COMMIT. status:", s?.status); process.exit(1); }
-  console.log("  -> status:", s.status, "| verdict:", s.verdict, "| action:", s.enforcement_action, "| blocked:", s.blocked, "| outcome:", s.appeal_outcome);
+async function waitStatus(want, label, maxMin = 45) {
+  const wants = Array.isArray(want) ? want : [want];
+  const deadline = Date.now() + maxMin * 60 * 1000;
+  while (Date.now() < deadline) {
+    const st = await getState();
+    if (wants.includes(st.status)) return st;
+    console.log("  ...waiting " + label + ": status=" + st.status);
+    await sleep(6000);
+  }
+  throw new Error("timeout waiting " + label);
 }
-const APPEAL_NOTE = "I am the author and I dispute this verdict - please reconsider, I believe my post does not violate the rules.";
-console.log("=== RESUME (enforce -> appeal -> resolve) ===");
-await step("enforce", [], "enforced", "enforce-tx.txt");
-console.log("  read_content after enforce:", await readContent());
-await step("appeal", [APPEAL_NOTE], "appealed", "appeal-tx.txt");
-await step("resolve_appeal", [], "resolved", "resolve-tx.txt");
-console.log("=== FINAL STATE ===");
-const sf = await read();
-console.log("  status:", sf?.status, "| verdict:", sf?.verdict, "| appeal_outcome:", sf?.appeal_outcome, "| blocked:", sf?.blocked, "| action:", sf?.enforcement_action);
-console.log("  read_content:", await readContent());
-console.log("  verify_content(original):", await verify(CONTENT));
-let hist = [];
-try { hist = JSON.parse(sf?.history || "[]"); } catch {}
-console.log("HISTORY ROUNDS:", hist.length);
-for (const it of hist) console.log("  round " + it.round + " [" + it.kind + "] verdict=" + it.verdict + " action=" + it.enforcement_action + " outcome=" + it.appeal_outcome + " by=" + it.by);
-console.log(">>> RESUME COMPLETE");
+async function main() {
+  console.log("resume contract:", ADDRESS);
+  console.log("operator:", operator.address, "| author:", author.address);
+  let recorded = existsSync("cm-recorded.txt") ? readFileSync("cm-recorded.txt", "utf8") : "";
+  let st = await getState();
+  console.log("current status:", st.status);
+  if (st.status === "created") {
+    const grace = Date.now() + 6 * 60 * 1000;
+    while (Date.now() < grace) {
+      st = await getState();
+      if (st.status !== "created") break;
+      console.log("  ...status still created, waiting for prior ingest to finalize");
+      await sleep(6000);
+    }
+  }
+  if (st.status === "created") {
+    console.log("ingest (author) ...");
+    const h = await submitWrite(cAuthor, "ingest", [SCAM_URL]);
+    writeFileSync("cm-ingest-tx.txt", h);
+    console.log("ingest tx:", h);
+    st = await waitStatus("pending", "ingest -> pending");
+  }
+  if (st.status === "pending" || st.status === "moderated") {
+    const c = await cOp.readContract({ address: ADDRESS, functionName: "read_content", args: [] });
+    if (c && !String(c).includes("REMOVED BY CONSENSUS")) { recorded = String(c); writeFileSync("cm-recorded.txt", recorded); }
+  }
+  if (st.status === "pending") {
+    console.log("moderate (operator) ...");
+    const h = await submitWrite(cOp, "moderate", []);
+    writeFileSync("cm-moderate-tx.txt", h);
+    console.log("moderate tx:", h);
+    st = await waitStatus("moderated", "moderate -> moderated");
+  }
+  console.log("verdict:", st.verdict, "| category:", st.category, "| reason:", st.reason);
+  if (st.status === "moderated") {
+    if (!recorded) {
+      const c = await cOp.readContract({ address: ADDRESS, functionName: "read_content", args: [] });
+      if (c && !String(c).includes("REMOVED BY CONSENSUS")) { recorded = String(c); writeFileSync("cm-recorded.txt", recorded); }
+    }
+    console.log("enforce (operator) ...");
+    const h = await submitWrite(cOp, "enforce", []);
+    writeFileSync("cm-enforce-tx.txt", h);
+    console.log("enforce tx:", h);
+    st = await waitStatus("enforced", "enforce -> enforced");
+  }
+  console.log("read_content ->", await cOp.readContract({ address: ADDRESS, functionName: "read_content", args: [] }));
+  if (st.status === "enforced") {
+    console.log("appeal (author) ...");
+    const h = await submitWrite(cAuthor, "appeal", ["Requesting appeal review of the consensus REMOVE verdict."]);
+    writeFileSync("cm-appeal-tx.txt", h);
+    console.log("appeal tx:", h);
+    st = await waitStatus("appealed", "appeal -> appealed");
+  }
+  if (st.status === "appealed") {
+    console.log("resolve_appeal (operator) ...");
+    const h = await submitWrite(cOp, "resolve_appeal", []);
+    writeFileSync("cm-resolve-tx.txt", h);
+    console.log("resolve_appeal tx:", h);
+    st = await waitStatus("resolved", "resolve -> resolved");
+  }
+  console.log("appeal_outcome:", st.appeal_outcome);
+  return { st, recorded };
+}
+async function finish(ctx) {
+  const recorded = ctx.recorded;
+  console.log("reverify_source (operator) ...");
+  const rh = await submitWrite(cOp, "reverify_source", []);
+  writeFileSync("cm-reverify-tx.txt", rh);
+  console.log("reverify tx:", rh);
+  let match = null;
+  for (let a = 1; a <= 40; a++) {
+    const s = await getState();
+    const hist = String(s.history || "").toLowerCase();
+    const m = hist.lastIndexOf("reverify");
+    if (m >= 0) {
+      const tail = hist.slice(m, m + 140);
+      if (tail.includes("match=true") || tail.includes("match\": true") || tail.includes("match=yes")) { match = true; break; }
+      if (tail.includes("match=false") || tail.includes("match\": false") || tail.includes("match=no")) { match = false; break; }
+    }
+    await sleep(6000);
+  }
+  console.log("reverify match:", match);
+  let vTrue = null, vFalse = null;
+  if (recorded) {
+    vTrue = await cOp.readContract({ address: ADDRESS, functionName: "verify_content", args: [recorded] });
+    vFalse = await cOp.readContract({ address: ADDRESS, functionName: "verify_content", args: [recorded + " TAMPERED"] });
+  }
+  const fin = await getState();
+  console.log("");
+  console.log("=== CM RUN SUMMARY (v0.5.0) ===");
+  console.log("contract:", ADDRESS);
+  console.log("author on record:", fin.author);
+  console.log("item_id:", fin.item_id, "| source:", fin.source);
+  console.log("content_hash:", fin.content_hash);
+  console.log("status:", fin.status, "| verdict:", fin.verdict, "| category:", fin.category);
+  console.log("appeal_outcome:", fin.appeal_outcome);
+  console.log("read_content:", await cOp.readContract({ address: ADDRESS, functionName: "read_content", args: [] }));
+  console.log("verify_content(recorded):", vTrue, "| verify_content(tampered):", vFalse);
+  console.log("reverify match:", match);
+  console.log("--- tx hashes ---");
+  for (const f of ["cm-contract", "cm-ingest-tx", "cm-moderate-tx", "cm-enforce-tx", "cm-appeal-tx", "cm-resolve-tx", "cm-reverify-tx"]) {
+    try { console.log(f + ":", readFileSync(f + ".txt", "utf8").trim()); } catch (e) {}
+  }
+  console.log(">>> CM RUN COMPLETE");
+}
+main().then(finish).catch((e) => { console.error("FATAL:", e?.message || e); process.exit(1); });
