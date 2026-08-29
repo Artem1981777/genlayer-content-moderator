@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ContentModerator Registry — Live dApp v1.0.0</title>
+<style>
+:root{--bg:#0a0c10;--side:#0e121a;--card:#141a24;--card2:#171d29;--mut:#8a93a7;--fg:#eef2f8;--line:#232b3a;--acc:#6ea8fe;--acc2:#8b7cff;--ok:#5ee08f;--warn:#e8cf5e;--bad:#ff8a8a;}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:-apple-system,Segoe UI,Roboto,sans-serif;}
+a{color:var(--acc);text-decoration:none;}
+.app{display:grid;grid-template-columns:250px 1fr;min-height:100vh;}
+.side{background:var(--side);border-right:1px solid var(--line);padding:16px 14px;position:sticky;top:0;height:100vh;overflow:auto;}
+.brand{font-size:16px;font-weight:700;display:flex;flex-direction:column;gap:2px;margin-bottom:16px;}
+.brand span{font-size:11px;color:var(--mut);font-weight:500;}
+.wallet{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:14px;}
+.waddr{font-size:12px;color:var(--mut);margin-top:8px;word-break:break-all;font-family:ui-monospace,monospace;}
+.wrow{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
+.pill{padding:3px 9px;border-radius:999px;background:#0f131b;border:1px solid var(--line);font-size:11px;}
+.nav{display:flex;flex-direction:column;gap:2px;margin-bottom:14px;}
+.nav a{padding:9px 11px;border-radius:9px;color:var(--fg);font-size:14px;cursor:pointer;}
+.nav a:hover{background:var(--card);}
+.nav a.on{background:linear-gradient(90deg,var(--acc),var(--acc2));color:#07101f;font-weight:700;}
+.links{display:flex;flex-direction:column;gap:6px;font-size:12px;border-top:1px solid var(--line);padding-top:12px;}
+.err{color:var(--bad);font-size:12px;margin-top:12px;}
+.main{padding:20px 22px 60px;max-width:1000px;}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;gap:12px;}
+h1{font-size:22px;margin:0;}
+.mut{color:var(--mut);font-size:12px;}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px;}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px;}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;}
+.stat .k{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;}
+.stat .v{font-size:19px;font-weight:700;margin-top:6px;font-family:ui-monospace,monospace;word-break:break-all;}
+.label{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin:10px 0 5px;}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+input{flex:1;min-width:160px;background:#0f131b;border:1px solid var(--line);color:var(--fg);border-radius:10px;padding:10px 12px;font-size:13px;}
+button{background:linear-gradient(90deg,var(--acc),var(--acc2));color:#07101f;border:0;border-radius:10px;padding:10px 15px;font-weight:700;font-size:13px;cursor:pointer;}
+button.sec{background:#222a3a;color:var(--fg);}
+button:disabled{opacity:.4;cursor:default;}
+.step{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;background:var(--card2);}
+.step h3{margin:0 0 8px;font-size:13px;}
+.num{display:inline-block;width:20px;height:20px;line-height:20px;text-align:center;border-radius:6px;background:var(--acc);color:#07101f;font-size:12px;font-weight:700;margin-right:6px;}
+.badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:700;margin:2px 4px 2px 0;}
+.b-approve{background:#123a24;color:var(--ok);}
+.b-flag{background:#3a3312;color:var(--warn);}
+.b-remove{background:#3a1a1a;color:var(--bad);}
+.b-grey{background:#22283a;color:#aeb8d0;}
+.bar{height:8px;border-radius:999px;background:#0f131b;border:1px solid var(--line);overflow:hidden;margin-top:8px;}
+.bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--ok));}
+.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px;}
+.item{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;background:var(--card2);}
+.chip{display:inline-block;padding:2px 7px;border-radius:6px;background:#0f131b;border:1px solid var(--line);font-size:11px;margin:2px 4px 2px 0;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);}
+th{color:var(--mut);font-size:11px;text-transform:uppercase;}
+.hide{display:none;}
+.txbar{position:sticky;bottom:0;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:12px;margin-top:10px;}
+@media(max-width:860px){.app{grid-template-columns:1fr;}.side{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line);}.nav{flex-direction:row;flex-wrap:wrap;}.stats{grid-template-columns:repeat(2,1fr);}.main{padding:16px 14px 60px;}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="side">
+<div class="brand">🛡️ ContentModerator<span>Registry dApp · v1.0.0</span></div>
+<div class="wallet">
+<button id="connect">Connect Wallet</button>
+<div id="wallet" class="waddr">not connected</div>
+<div class="wrow"><span class="pill" id="net">Bradbury</span><span class="pill" id="bal">— GEN</span></div>
+</div>
+<nav class="nav">
+<a data-view="overview" class="on">Overview</a>
+<a data-view="actions">Actions</a>
+<a data-view="items">Items</a>
+<a data-view="payouts">Payouts</a>
+<a data-view="about">About</a>
+</nav>
+<div class="links">
+<a id="lnkContract" target="_blank">Contract ↗</a>
+<a href="https://explorer-bradbury.genlayer.com" target="_blank">Explorer ↗</a>
+<a href="https://docs.genlayer.com" target="_blank">GenLayer Docs ↗</a>
+</div>
+<div id="err" class="err"></div>
+</aside>
+<main class="main">
+<header class="top">
+<div><h1 id="ptitle">Overview</h1><div id="updated" class="mut">—</div></div>
+<button id="refresh" class="sec">↻ Refresh</button>
+</header>
+<section id="v-overview" class="view">
+<div class="stats">
+<div class="stat"><div class="k">Pool</div><div class="v" id="s-pool">—</div></div>
+<div class="stat"><div class="k">Items</div><div class="v" id="s-items">—</div></div>
+<div class="stat"><div class="k">Payouts</div><div class="v" id="s-pay">—</div></div>
+<div class="stat"><div class="k">Min stake</div><div class="v" id="s-min">—</div></div>
+<div class="stat"><div class="k">Report bond</div><div class="v" id="s-rep">—</div></div>
+<div class="stat"><div class="k">Appeal bond</div><div class="v" id="s-app">—</div></div>
+</div>
+<div class="card">
+<div class="label">Registry address</div>
+<div class="row"><input id="addr" value="0x8F2D6Bf4C1A860E225c36C687c411292fc6c7c5e" /></div>
+<div class="label">Owner</div>
+<div class="val mono" id="s-owner">—</div>
+<div class="label">Default rules</div>
+<div class="mut" id="rulesbox">—</div>
+</div>
+</section>
+<section id="v-actions" class="view hide">
+<div class="step">
+<h3><span class="num">1</span>Create item</h3>
+<div class="label">Rules (optional — defaults to registry rules)</div>
+<div class="row"><input id="rules" placeholder="community rules for this item" /><button id="btnCreate">Create</button></div>
+</div>
+<div class="step">
+<h3><span class="num">2</span>Active item</h3>
+<div class="row"><input id="item" placeholder="create above or paste an item_id" /></div>
+</div>
+<div class="step">
+<h3><span class="num">3</span>Ingest content (author stake)</h3>
+<div class="row"><input id="url" placeholder="https://.../post.html" /><button id="btnIngest">Ingest</button></div>
+</div>
+<div class="step">
+<h3><span class="num">4</span>Report &amp; moderate</h3>
+<div class="row"><button id="btnReport">Report (bond)</button><button id="btnModerate">Moderate</button><button id="btnEnforce">Enforce</button></div>
+</div>
+<div class="step">
+<h3><span class="num">5</span>Appeal flow</h3>
+<div class="row"><input id="note" placeholder="appeal note" /><button id="btnAppeal">Appeal (bond)</button><button id="btnResolve">Resolve</button></div>
+</div>
+<div class="step">
+<h3><span class="num">6</span>Maintenance</h3>
+<div class="row"><input id="fund" placeholder="fund amount in wei" /><button id="btnFund">Fund pool</button><button id="btnReverify" class="sec">Reverify source</button></div>
+</div>
+</section>
+<section id="v-items" class="view hide"><div id="items"></div></section>
+<section id="v-payouts" class="view hide"><div id="pay"></div></section>
+<section id="v-about" class="view hide">
+<div class="card">
+<div class="label">About</div>
+<div class="val">Multi-item content-moderation registry on GenLayer Bradbury. An LLM Intelligent Contract scores content across 7 axes with self-calibrating confidence and auto-escalation; authors stake, reporters bond, and payouts settle on-chain with a transparent ledger. Appeals are contestable and resolved on-chain. All reads and writes are live from your wallet.</div>
+</div>
+</section>
+<div id="tx" class="txbar">Idle — connect your wallet to start.</div>
+</main>
+</div>
+<script type="module">
+import { createClient } from "https://esm.sh/genlayer-js";
+import { testnetBradbury } from "https://esm.sh/genlayer-js/chains";
+import { TransactionStatus } from "https://esm.sh/genlayer-js/types";
+const EXPLORER = "https://explorer-bradbury.genlayer.com";
+const readClient = createClient({ chain: testnetBradbury });
+let writeClient = null, account = null, busy = false, cfg = null;
+const byId = (id) => document.getElementById(id);
+const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; return e; };
+const short = (s) => { s = String(s || ""); return s.length > 16 ? s.slice(0, 8) + "…" + s.slice(-6) : s; };
+const addr = () => byId("addr").value.trim();
+const setErr = (m) => { byId("err").textContent = m || ""; };
+const setText = (id, v) => { const n = byId(id); if (n) n.textContent = v; };
+const stamp = () => setText("updated", "updated " + new Date().toLocaleTimeString());
+function asList(p, keys) { if (Array.isArray(p)) return p; if (p && typeof p === "object") { for (const k of keys) if (Array.isArray(p[k])) return p[k]; } return []; }
+function badge(v) { const t = String(v || "").toUpperCase(); const b = el("span", "badge"); if (t === "APPROVE") b.className = "badge b-approve"; else if (t === "REMOVE") b.className = "badge b-remove"; else if (t === "FLAG") b.className = "badge b-flag"; else b.className = "badge b-grey"; b.textContent = t || "PENDING"; return b; }
+function txLink(hash) { const a = el("a"); a.href = EXPLORER + "/tx/" + hash; a.target = "_blank"; a.textContent = short(hash); return a; }
+function setTx(node) { const box = byId("tx"); box.innerHTML = ""; if (typeof node === "string") box.textContent = node; else if (node) box.appendChild(node); }
+async function readJson(fn, args) { const raw = await readClient.readContract({ address: addr(), functionName: fn, args: args || [] }); if (typeof raw === "string") { if (raw === "") return null; try { return JSON.parse(raw); } catch (e) { return raw; } } return raw; }
+async function connect() { setErr(""); try { if (!window.ethereum) { setErr("No wallet found. Open in MetaMask/OKX in-app browser."); return; } const accts = await window.ethereum.request({ method: "eth_requestAccounts" }); account = accts[0]; writeClient = createClient({ chain: testnetBradbury, account: account, provider: window.ethereum }); await writeClient.connect("testnetBradbury"); byId("wallet").textContent = short(account); setTx("Wallet connected — ready."); await refreshBalance(); } catch (e) { setErr("Connect failed: " + (e && e.message ? e.message : e)); } }
+async function refreshBalance() { try { if (!account) return; const wei = await window.ethereum.request({ method: "eth_getBalance", params: [account, "latest"] }); byId("bal").textContent = (Number(BigInt(wei)) / 1e18).toFixed(4) + " GEN"; } catch (e) {} }
+const navSet = ["overview","actions","items","payouts","about"];
+const TITLES = { overview:"Overview", actions:"Actions", items:"Items", payouts:"Payouts", about:"About" };
+function navTo(v) { for (const s of navSet) { const sec = byId("v-" + s); if (sec) sec.classList.toggle("hide", s !== v); } document.querySelectorAll(".nav a").forEach((a) => a.classList.toggle("on", a.dataset.view === v)); setText("ptitle", TITLES[v] || v); }
+async function refreshCfg() { const c = await readJson("get_config", []); cfg = c || {}; setText("s-pool", cfg.pool == null ? "—" : cfg.pool); setText("s-items", cfg.item_count == null ? "—" : cfg.item_count); setText("s-min", cfg.min_stake == null ? "—" : cfg.min_stake); setText("s-rep", cfg.report_bond == null ? "—" : cfg.report_bond); setText("s-app", cfg.appeal_bond == null ? "—" : cfg.appeal_bond); setText("s-owner", short(cfg.owner)); const r = byId("rulesbox"); if (r) r.textContent = cfg.default_rules || "—"; }
+function itemCard(it) { const c = el("div", "item"); const line = el("div", "row"); line.appendChild(el("span", "mono", short(it.id))); line.appendChild(el("span", "badge b-grey", String(it.status || "—"))); line.appendChild(badge(it.verdict)); if (it.category && it.category !== "none") line.appendChild(el("span", "badge b-grey", it.category)); if (it.escalated === true || it.escalated === "true") line.appendChild(el("span", "badge b-flag", "escalated")); if (it.injection_detected === true || it.injection_detected === "true") line.appendChild(el("span", "badge b-remove", "injection")); if (it.needs_review === true || it.needs_review === "true") line.appendChild(el("span", "badge b-flag", "needs review")); c.appendChild(line); const conf = Number(it.confidence); if (Number.isFinite(conf) && String(it.confidence).length) { c.appendChild(el("div", "mut", "confidence " + conf + "%")); const bar = el("div", "bar"); const fi = el("i"); fi.style.width = Math.max(0, Math.min(100, conf)) + "%"; bar.appendChild(fi); c.appendChild(bar); } const ax = it.axis_scores || it.axes; if (ax && typeof ax === "object") { const box = el("div"); box.style.marginTop = "8px"; for (const k of Object.keys(ax)) { if (Number(ax[k]) > 0) box.appendChild(el("span", "chip", k + " " + ax[k])); } if (box.childNodes.length) c.appendChild(box); } const meta = el("div", "mut"); meta.style.marginTop = "8px"; meta.textContent = "author " + short(it.author) + " · reporter " + short(it.reporter) + " · stake " + String(it.stake_outcome || "—"); c.appendChild(meta); const use = el("button", "sec"); use.textContent = "Use this id"; use.style.marginTop = "8px"; use.addEventListener("click", () => { byId("item").value = it.id; navTo("actions"); }); c.appendChild(use); return c; }
+async function refreshItems() { const parsed = await readJson("get_all_items", [0, 100]); const list = asList(parsed, ["items","rows","entries"]); const box = byId("items"); box.innerHTML = ""; if (!list.length) { box.appendChild(el("div", "mut", "No items yet.")); return; } for (const it of list) box.appendChild(itemCard(it)); }
+async function refreshPayouts() { const parsed = await readJson("get_payouts", []); const list = asList(parsed, ["payouts","entries","ledger","history","items"]); setText("s-pay", list.length); const box = byId("pay"); box.innerHTML = ""; if (!list.length) { box.appendChild(el("div", "mut", "No payouts yet.")); return; } const t = el("table"); const hr = el("tr"); for (const h of ["Amount","Recipient","Reason"]) hr.appendChild(el("th", null, h)); t.appendChild(hr); for (const p of list) { const tr = el("tr"); tr.appendChild(el("td", "mono", String(p.amount == null ? (p.value == null ? "" : p.value) : p.amount))); tr.appendChild(el("td", "mono", short(p.to || p.recipient || p.address))); tr.appendChild(el("td", null, String(p.reason || p.kind || p.type || ""))); t.appendChild(tr); } box.appendChild(t); }
+async function refreshAll() { setErr(""); try { await refreshCfg(); await refreshItems(); await refreshPayouts(); stamp(); } catch (e) { setErr("Read failed: " + (e && e.message ? e.message : e)); } }
+function setButtons(dis) { for (const id of ["btnCreate","btnIngest","btnReport","btnModerate","btnEnforce","btnResolve","btnReverify","btnAppeal","btnFund"]) { const b = byId(id); if (b) b.disabled = dis; } }
+function itemId() { return byId("item").value.trim(); }
+function needItem() { if (!itemId()) { setErr("Enter or create an item_id first."); navTo("actions"); return false; } return true; }
+function needCfg() { if (!cfg || cfg.min_stake === undefined) { setErr("Config not loaded — press Refresh."); return false; } return true; }
+async function send(fn, args, value, label) { if (busy) return; if (!writeClient) { setErr("Connect your wallet first."); return; } busy = true; setButtons(true); setTx(label + ": sending, confirm in wallet…"); try { const hash = await writeClient.writeContract({ address: addr(), functionName: fn, args: args || [], value: value || 0n }); const s1 = el("span"); s1.appendChild(document.createTextNode(label + " tx ")); s1.appendChild(txLink(hash)); setTx(s1); await writeClient.waitForTransactionReceipt({ hash, status: TransactionStatus.ACCEPTED }); const s2 = el("span"); s2.appendChild(document.createTextNode(label + " accepted ")); s2.appendChild(txLink(hash)); setTx(s2); await refreshAll(); await refreshBalance(); return hash; } catch (e) { setErr(label + " failed: " + (e && e.message ? e.message : e)); } finally { busy = false; setButtons(false); } }
+async function doCreate() { const rules = byId("rules").value.trim() || (cfg && cfg.default_rules) || "APPROVE compliant content, FLAG borderline, REMOVE violations."; const before = (await readJson("get_item_ids", [])) || []; await send("create_item", [rules], 0n, "create_item"); const after = (await readJson("get_item_ids", [])) || []; const fresh = after.find((x) => !before.includes(x)); if (fresh) { byId("item").value = fresh; setErr(""); } }
+function doIngest() { if (!needItem() || !needCfg()) return; const url = byId("url").value.trim(); if (!url) { setErr("Enter a source URL."); return; } send("ingest", [itemId(), url], BigInt(cfg.min_stake), "ingest"); }
+function doReport() { if (!needItem() || !needCfg()) return; send("report", [itemId()], BigInt(cfg.report_bond), "report"); }
+function doModerate() { if (!needItem()) return; send("moderate", [itemId()], 0n, "moderate"); }
+function doEnforce() { if (!needItem()) return; send("enforce", [itemId()], 0n, "enforce"); }
+function doResolve() { if (!needItem()) return; send("resolve_appeal", [itemId()], 0n, "resolve_appeal"); }
+function doReverify() { if (!needItem()) return; send("reverify_source", [itemId()], 0n, "reverify_source"); }
+function doAppeal() { if (!needItem() || !needCfg()) return; const note = byId("note").value.trim() || "appeal"; send("appeal", [itemId(), note], BigInt(cfg.appeal_bond), "appeal"); }
+function doFund() { const amt = byId("fund").value.trim(); if (!amt) { setErr("Enter fund amount in wei."); return; } if (!writeClient) { setErr("Connect wallet first."); return; } send("fund_pool", [], BigInt(amt), "fund_pool"); }
+byId("connect").addEventListener("click", connect);
+byId("refresh").addEventListener("click", refreshAll);
+byId("btnCreate").addEventListener("click", doCreate);
+byId("btnIngest").addEventListener("click", doIngest);
+byId("btnReport").addEventListener("click", doReport);
+byId("btnModerate").addEventListener("click", doModerate);
+byId("btnEnforce").addEventListener("click", doEnforce);
+byId("btnResolve").addEventListener("click", doResolve);
+byId("btnReverify").addEventListener("click", doReverify);
+byId("btnAppeal").addEventListener("click", doAppeal);
+byId("btnFund").addEventListener("click", doFund);
+document.querySelectorAll(".nav a").forEach((a) => a.addEventListener("click", () => navTo(a.dataset.view)));
+if (window.ethereum && window.ethereum.on) { window.ethereum.on("accountsChanged", (a) => { account = a && a[0]; byId("wallet").textContent = account ? short(account) : "not connected"; refreshBalance(); }); }
+byId("lnkContract").href = EXPLORER + "/address/" + addr();
+refreshAll();
+setInterval(() => { if (!busy) refreshAll(); }, 8000);
+</script>
+</body>
+</html>
