@@ -282,7 +282,7 @@ function drawGauge(c, it) { if (!c) return; const x = c.getContext("2d"), w = c.
 function showVerdict(it) { lastVerdictItem = it; setText("verdictTitle", "Item " + short(it.id) + (it.category && it.category !== "none" ? " · " + it.category : "")); const b = byId("verdictBadge"); b.className = "badge " + verdictClass(it.verdict); b.textContent = String(it.verdict || "PENDING").toUpperCase(); drawRadar(byId("radar"), it); drawGauge(byId("gauge"), it); }
 function tlRow(kind, label, hash, ms) { const tl = byId("timeline"); const em = tl.querySelector(".empty"); if (em) em.remove(); const row = el("div", "tlrow"); const cls = kind === "confirmed" ? "bapprove" : kind === "failed" ? "bremove" : "bflag"; const st = el("span", "badge " + cls, kind); const time = el("span", "mut", " " + new Date().toLocaleTimeString() + (ms ? " · " + ms + "ms" : "")); const r1 = el("div", "row"); r1.appendChild(st); r1.appendChild(el("b", null, " " + label)); r1.appendChild(time); row.appendChild(r1); if (hash) { const a = el("a", "mono", short(hash)); a.href = EXPLORER + "/tx/" + hash; a.target = "_blank"; const cp = el("span", "copy", "copy"); cp.style.marginLeft = "8px"; cp.addEventListener("click", () => copy(hash)); const r2 = el("div"); r2.style.marginTop = "4px"; r2.appendChild(a); r2.appendChild(cp); row.appendChild(r2); } tl.insertBefore(row, tl.firstChild); return row; }
 function loadBtn(id, on) { const b = byId(id); if (!b) return; if (on) { b.dataset.html = b.innerHTML; b.innerHTML = ""; b.appendChild(el("span", "spin")); } else if (b.dataset.html !== undefined) { b.innerHTML = b.dataset.html; } }
-async function send(fn, args, value, label, btnId) { if (busy) return; if (!writeClient) { setErr("Connect your wallet first."); return; } if (!(await guardNetwork())) { setErr(label + " blocked — wrong network. NOT sent."); return; } busy = true; setButtons(true); loadBtn(btnId, true); byId("tx").textContent = label + "…"; const t0 = performance.now(); let pend = null; try { const hash = await writeClient.writeContract({ address: REGISTRY, functionName: fn, args: args || [], value: value || 0n }); pend = tlRow("pending", label, hash); byId("tx").textContent = label + " pending"; await writeClient.waitForTransactionReceipt({ hash, status: TransactionStatus.ACCEPTED }); const ms = Math.round(performance.now() - t0); if (pend) pend.remove(); tlRow("confirmed", label, hash, ms); byId("tx").textContent = "idle"; toast(label + " confirmed · " + short(hash) + " · " + ms + "ms", "bapprove"); await refreshAll(); refreshBalance(); return hash; } catch (e) { if (pend) pend.remove(); tlRow("failed", label, null); setErr(label + " failed: " + (e && e.message ? e.message : e)); } finally { busy = false; setButtons(offNetwork); loadBtn(btnId, false); } }
+async function send(fn, args, value, label, btnId) { if (busy) return; if (!writeClient) { setErr("Connect your wallet first."); return; } if (!(await guardNetwork())) { setErr(label + " blocked — wrong network. NOT sent."); return; } busy = true; setButtons(true); loadBtn(btnId, true); byId("tx").textContent = label + "…"; const t0 = performance.now(); let pend = null; try { const hash = await writeWithRetry(writeClient, fn, args, value); pend = tlRow("pending", label, hash); byId("tx").textContent = label + " pending"; await writeClient.waitForTransactionReceipt({ hash, status: TransactionStatus.ACCEPTED }); const ms = Math.round(performance.now() - t0); if (pend) pend.remove(); tlRow("confirmed", label, hash, ms); byId("tx").textContent = "idle"; toast(label + " confirmed · " + short(hash) + " · " + ms + "ms", "bapprove"); await rereadAfter(fn, args); await refreshAll(); refreshBalance(); return hash; } catch (e) { if (pend) pend.remove(); tlRow("failed", label, null); setErr(label + " failed: " + (e && e.message ? e.message : e)); } finally { busy = false; setButtons(offNetwork); loadBtn(btnId, false); } }
 function activeId() { return (byId("item").value.trim() || byId("itemSel").value || "").trim(); }
 function needItem() { if (!activeId()) { setErr("Choose or create an item first."); showTab("console"); showZone("flow"); return false; } byId("item").value = activeId(); return true; }
 function isUrl(u) { return /^https?:\/\/.+/i.test(u); }
@@ -319,6 +319,107 @@ byId("btnResolve").addEventListener("click", doResolve);
 byId("btnAppeal").addEventListener("click", doAppeal);
 byId("btnFund").addEventListener("click", doFund);
 byId("btnReverify").addEventListener("click", doReverify);
+
+/* --- Milestone v1 (BLOCK4): RPC retry + status reread + guided Judge/Steward cycles --- */
+async function writeWithRetry(client, fn, args, value){
+  var attempts = 0, lastErr = null;
+  while (attempts < 3){
+    attempts++;
+    try { return await client.writeContract({ address: REGISTRY, functionName: fn, args: args || [], value: value || 0n }); }
+    catch (e){
+      lastErr = e;
+      var m = String((e && e.message) || e || "").toLowerCase();
+      var transient = m.indexOf("fetch") !== -1 || m.indexOf("rate limit") !== -1 || m.indexOf("-32005") !== -1 || m.indexOf("capacity") !== -1 || m.indexOf("timeout") !== -1 || m.indexOf("network") !== -1;
+      if (transient && attempts < 3){ byId("tx").textContent = fn + " retry " + attempts; toast(fn + " transient RPC error - retry " + attempts, "bflag"); await new Promise(function(r){ setTimeout(r, 1500 * attempts); }); continue; }
+      throw e;
+    }
+  }
+  throw lastErr;
+}
+async function rereadAfter(fn, args){
+  try {
+    if (!args || !args.length) return;
+    var itemFns = ["ingest","report","moderate","enforce","appeal","resolve_appeal","reverify_source"];
+    if (itemFns.indexOf(fn) === -1) return;
+    var it = await readJson("get_item", [args[0]]);
+    if (it && it.status){ toast("status -> " + it.status + (it.verdict ? " / " + it.verdict : ""), "bflag"); if (it.verdict) showVerdict(it); }
+  } catch (e){}
+}
+async function waitStatusUi(id, wanted, maxPolls){
+  for (var i = 0; i < (maxPolls || 12); i++){
+    var it = await readJson("get_item", [id]);
+    if (it && wanted.indexOf(it.status) !== -1) return it;
+    await new Promise(function(r){ setTimeout(r, 6000); });
+  }
+  return await readJson("get_item", [id]);
+}
+function setCycle(msg){ var n = byId("cycleOut"); if (n) n.textContent = msg; }
+async function runJudgeCycle(){
+  if (window.__cycleBusy) { setErr("A guided cycle is already running."); return; }
+  if (busy) { setErr("Busy - wait for the current action to finish."); return; }
+  if (!writeClient) { setErr("Connect the owner wallet first."); return; }
+  var url = (byId("url").value || "").trim();
+  if (!isUrl(url)) { setErr("Judge cycle: enter a valid http(s) ingest URL first."); showTab("console"); showZone("flow"); return; }
+  if (!cfg || cfg.min_stake == null) { setErr("Config not loaded yet - try again in a moment."); return; }
+  window.__cycleBusy = true;
+  try {
+    setCycle("Judge cycle: creating item...");
+    await doCreate();
+    var id = activeId(); if (!id){ setCycle("Judge cycle: could not resolve new item id."); return; }
+    setCycle("Judge cycle: ingesting source (stake " + fmt(cfg.min_stake) + ")...");
+    var h1 = await send("ingest", [id, url], BigInt(cfg.min_stake), "ingest", "btnIngest");
+    if (!h1){ setCycle("Judge cycle stopped at ingest."); return; }
+    var s1 = await waitStatusUi(id, ["ingested"], 15);
+    if (!s1 || s1.status !== "ingested"){ setCycle("Ingest not converged - click Ingest again, then Moderate (status: " + (s1 && s1.status ? s1.status : "?") + ")."); return; }
+    setCycle("Judge cycle: moderating...");
+    var h2 = await send("moderate", [id], 0n, "moderate", "btnModerate");
+    if (!h2){ setCycle("Judge cycle stopped at moderate."); return; }
+    await waitStatusUi(id, ["moderated"], 15);
+    var itm = await readJson("get_item", [id]); if (itm) showVerdict(itm);
+    setCycle("Verdict " + (itm && itm.verdict ? itm.verdict : "?") + " - enforcing...");
+    var h3 = await send("enforce", [id], 0n, "enforce", "btnEnforce");
+    if (!h3){ setCycle("Judge cycle stopped at enforce (owner-only)."); return; }
+    await waitStatusUi(id, ["enforced"], 15);
+    var fin = await readJson("get_item", [id]); if (fin) showVerdict(fin);
+    setCycle("Judge cycle done / " + short(id) + " / verdict " + (fin && fin.verdict ? fin.verdict : "?") + " / status " + (fin && fin.status ? fin.status : "?"));
+  } catch (e){ setCycle("Judge cycle error: " + ((e && e.message) || e)); }
+  finally { window.__cycleBusy = false; }
+}
+async function runStewardCycle(){
+  if (window.__cycleBusy) { setErr("A guided cycle is already running."); return; }
+  if (busy) { setErr("Busy - wait for the current action to finish."); return; }
+  if (!writeClient) { setErr("Connect the owner wallet first."); return; }
+  var id = activeId(); if (!id){ setErr("Steward: choose an item in 'appealed' status first."); showTab("console"); showZone("flow"); return; }
+  window.__cycleBusy = true;
+  try {
+    var it = await readJson("get_item", [id]);
+    if (!it || it.status !== "appealed"){ setErr("Steward: item must be in 'appealed' status to resolve (current: " + (it && it.status ? it.status : "unknown") + ")."); return; }
+    setCycle("Steward: resolving appeal for " + short(id) + "...");
+    var h = await send("resolve_appeal", [id], 0n, "resolve_appeal", "btnResolve");
+    if (!h){ setCycle("Steward: resolve failed (owner-only?)."); return; }
+    var it2 = await readJson("get_item", [id]); if (it2) showVerdict(it2);
+    var overturned = it2 && (it2.overturned === true || it2.overturned === "true");
+    setCycle("Steward done / " + short(id) + " / " + (overturned ? "appeal upheld -> APPROVE (overturned)" : "original verdict upheld"));
+  } catch (e){ setCycle("Steward cycle error: " + ((e && e.message) || e)); }
+  finally { window.__cycleBusy = false; }
+}
+(function buildGuidedCard(){
+  try {
+    var zone = byId("zone-flow"); if (!zone || byId("guidedCard")) return;
+    var card = el("div", "card"); card.id = "guidedCard"; card.style.marginTop = "12px";
+    card.appendChild(el("div", "k", "Guided cycles (one-click)"));
+    card.appendChild(el("div", "mut", "Judge: create -> ingest -> moderate -> enforce (set an ingest URL, connect owner wallet). Steward: resolve an appealed item (owner wallet). Each step posts an Explorer link to the timeline."));
+    var row = el("div", "row"); row.style.margin = "8px 0";
+    var bJudge = el("button", "btn sm pri", "▶ Run Judge cycle"); bJudge.id = "btnJudgeCycle"; bJudge.style.marginRight = "8px";
+    var bSteward = el("button", "btn sm", "▶ Steward: resolve appeal"); bSteward.id = "btnStewardCycle";
+    row.appendChild(bJudge); row.appendChild(bSteward); card.appendChild(row);
+    var out = el("div", "mut mono"); out.id = "cycleOut"; out.textContent = "idle"; card.appendChild(out);
+    zone.appendChild(card);
+    bJudge.addEventListener("click", runJudgeCycle);
+    bSteward.addEventListener("click", runStewardCycle);
+    if (typeof BTNS !== "undefined" && BTNS && BTNS.push){ BTNS.push("btnJudgeCycle"); BTNS.push("btnStewardCycle"); }
+  } catch (e){}
+})();
 byId("it-search").addEventListener("input", renderItems);
 byId("it-filter").addEventListener("change", renderItems);
 byId("it-goflow").addEventListener("click", () => { showTab("console"); showZone("flow"); });
