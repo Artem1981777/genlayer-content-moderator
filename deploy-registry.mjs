@@ -1,0 +1,27 @@
+import { readFileSync, writeFileSync } from "node:fs";
+import { createClient, createAccount } from "genlayer-js";
+import { testnetBradbury } from "genlayer-js/chains";
+import { TransactionStatus } from "genlayer-js/types";
+const PRIVATE_KEY = process.env.PRIVATE_KEY;
+if (!PRIVATE_KEY) { throw new Error("PRIVATE_KEY missing. Run: node --env-file=.env deploy-registry.mjs"); }
+const RULES = "No spam or advertising. No scams, phishing, or requests for private keys or seed phrases. No hate speech or harassment. No violence or threats. APPROVE compliant content, FLAG borderline content, REMOVE clear violations.";
+const source = readFileSync("contracts/registry.py", "utf8");
+const code = new TextEncoder().encode(source);
+const account = createAccount(PRIVATE_KEY);
+const client = createClient({ chain: testnetBradbury, account });
+console.log("Deploying ContentModeratorRegistry v1.1...");
+const txHash = await client.deployContract({ code, args: [RULES] });
+console.log("deploy tx:", txHash);
+await client.waitForTransactionReceipt({ hash: txHash, status: TransactionStatus.ACCEPTED, retries: 300 });
+const tx = await client.getTransaction({ hash: txHash });
+const address = tx?.txDataDecoded?.contractAddress ?? tx?.recipient;
+console.log("=== DEPLOY RESULT ===");
+console.log("txExecutionResultName:", tx?.txExecutionResultName);
+console.log("contract address:", address);
+const ok = (tx?.txExecutionResultName === "FINISHED" || tx?.txExecutionResultName === "FINISHED_WITH_RETURN");
+console.log(ok ? "CLEAN DEPLOY OK" : ("WARNING execution not clean: " + tx?.txExecutionResultName));
+writeFileSync("registry-contract.txt", String(address));
+writeFileSync("registry-deploy-tx.txt", String(txHash));
+console.log("saved address:", String(address));
+console.log("tx explorer:", "https://explorer-bradbury.genlayer.com/tx/" + String(txHash));
+console.log("addr explorer:", "https://explorer-bradbury.genlayer.com/address/" + String(address));
