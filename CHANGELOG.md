@@ -24,6 +24,7 @@ All notable changes to **ContentModerator**. Commit links point to the repositor
 - Moderation fixtures for seeding — [8adee88](https://github.com/Artem1981777/genlayer-content-moderator/commit/8adee88), [9bbb6f6](https://github.com/Artem1981777/genlayer-content-moderator/commit/9bbb6f6)
 
 ### dApp (major feature)
+- Mission-control dashboard: one-click Judge/Steward guided cycles, RPC-retry on transient errors, input validation, and post-transaction status reread with Explorer links — [bd0148c](https://github.com/Artem1981777/genlayer-content-moderator/commit/bd0148c)
 - Mission-control dashboard: 3-zone layout, vertical stepper, radar/gauge charts, KPI sparklines, network-health, activity timeline, items grid + payout ledger — [7da73ab](https://github.com/Artem1981777/genlayer-content-moderator/commit/7da73ab)
 - Restore visible matrix background — [7bfe6f3](https://github.com/Artem1981777/genlayer-content-moderator/commit/7bfe6f3)
 - Production dApp redesign: onboarding, 7-axis item modal, selector, toasts, tooltips, confirm modals, tx feed — [c4d78a1](https://github.com/Artem1981777/genlayer-content-moderator/commit/c4d78a1)
