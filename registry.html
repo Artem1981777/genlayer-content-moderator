@@ -168,8 +168,9 @@ import { createClient } from "https://esm.sh/genlayer-js";
 import { testnetBradbury } from "https://esm.sh/genlayer-js/chains";
 import { TransactionStatus } from "https://esm.sh/genlayer-js/types";
 const EXPLORER = "https://explorer-bradbury.genlayer.com";
+const CHAIN_HEX = "0x107d";
 const readClient = createClient({ chain: testnetBradbury });
-let writeClient = null, account = null, busy = false, cfg = null;
+let writeClient = null, account = null, busy = false, cfg = null, activeProvider = null;
 const byId = (id) => document.getElementById(id);
 const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; return e; };
 const short = (s) => { s = String(s || ""); return s.length > 16 ? s.slice(0, 8) + "…" + s.slice(-6) : s; };
@@ -182,8 +183,16 @@ function badge(v) { const t = String(v || "").toUpperCase(); const b = el("span"
 function txLink(hash) { const a = el("a"); a.href = EXPLORER + "/tx/" + hash; a.target = "_blank"; a.textContent = short(hash); return a; }
 function setTx(node) { const box = byId("tx"); box.innerHTML = ""; if (typeof node === "string") box.textContent = node; else if (node) box.appendChild(node); }
 async function readJson(fn, args) { const raw = await readClient.readContract({ address: addr(), functionName: fn, args: args || [] }); if (typeof raw === "string") { if (raw === "") return null; try { return JSON.parse(raw); } catch (e) { return raw; } } return raw; }
-async function connect() { setErr(""); try { if (!window.ethereum) { setErr("No wallet found. Open in MetaMask/OKX in-app browser."); return; } const accts = await window.ethereum.request({ method: "eth_requestAccounts" }); account = accts[0]; writeClient = createClient({ chain: testnetBradbury, account: account, provider: window.ethereum }); await writeClient.connect("testnetBradbury"); byId("wallet").textContent = short(account); setTx("Wallet connected — ready."); await refreshBalance(); } catch (e) { setErr("Connect failed: " + (e && e.message ? e.message : e)); } }
-async function refreshBalance() { try { if (!account) return; const wei = await window.ethereum.request({ method: "eth_getBalance", params: [account, "latest"] }); byId("bal").textContent = (Number(BigInt(wei)) / 1e18).toFixed(4) + " GEN"; } catch (e) {} }
+const wallets = [];
+function addWallet(d) { if (!d || !d.provider) return; if (d.info && wallets.find((w) => w.info && w.info.rdns === d.info.rdns)) return; wallets.push(d); }
+window.addEventListener("eip6963:announceProvider", (e) => addWallet(e.detail));
+window.dispatchEvent(new Event("eip6963:requestProvider"));
+function nameOf(p, fb) { if (!p) return fb || "Injected"; if (p.isOKXWallet || p.isOkxWallet) return "OKX Wallet"; if (p.isRabby) return "Rabby"; if (p.isCoinbaseWallet) return "Coinbase"; if (p.isMetaMask) return "MetaMask"; return fb || "Injected"; }
+function listProviders() { const out = []; for (const w of wallets) out.push({ name: (w.info && w.info.name) || nameOf(w.provider), provider: w.provider }); if (!out.length && window.ethereum) { const eth = window.ethereum; if (Array.isArray(eth.providers) && eth.providers.length) { for (const p of eth.providers) out.push({ name: nameOf(p), provider: p }); } else { out.push({ name: nameOf(eth), provider: eth }); } } return out; }
+function openWallet() { setErr(""); try { window.dispatchEvent(new Event("eip6963:requestProvider")); } catch (e) {} const list = listProviders(); if (!list.length) { setErr("No wallet detected. Install MetaMask, OKX, or Rabby."); return; } if (list.length === 1) { connectWith(list[0].provider); return; } const box = byId("tx"); box.innerHTML = ""; box.appendChild(el("span", "mut", "Choose a wallet: ")); for (const w of list) { const b = el("button", "sec", w.name); b.style.margin = "0 6px 6px 0"; b.addEventListener("click", () => connectWith(w.provider)); box.appendChild(b); } }
+async function ensureNetwork(p) { try { await p.request({ method: "wallet_switchEthereumChain", params: [{ chainId: CHAIN_HEX }] }); } catch (e) { const code = e && (e.code || (e.data && e.data.originalError && e.data.originalError.code)); if (code === 4902 || code === -32603) { await p.request({ method: "wallet_addEthereumChain", params: [{ chainId: CHAIN_HEX, chainName: "GenLayer Testnet Bradbury", nativeCurrency: { name: "GEN", symbol: "GEN", decimals: 18 }, rpcUrls: ["https://rpc-bradbury.genlayer.com"], blockExplorerUrls: ["https://explorer-bradbury.genlayer.com"] }] }); await p.request({ method: "wallet_switchEthereumChain", params: [{ chainId: CHAIN_HEX }] }); } else { throw e; } } }
+async function connectWith(p) { setErr(""); try { activeProvider = p; const accts = await p.request({ method: "eth_requestAccounts" }); account = accts && accts[0]; await ensureNetwork(p); writeClient = createClient({ chain: testnetBradbury, account: account, provider: p }); byId("wallet").textContent = short(account); setTx("Wallet connected — ready."); if (p.on) { p.on("accountsChanged", (a) => { account = a && a[0]; byId("wallet").textContent = account ? short(account) : "not connected"; refreshBalance(); }); p.on("chainChanged", () => refreshBalance()); } await refreshBalance(); } catch (e) { setErr("Connect failed: " + (e && e.message ? e.message : e)); } }
+async function refreshBalance() { try { if (!account || !activeProvider) return; const wei = await activeProvider.request({ method: "eth_getBalance", params: [account, "latest"] }); byId("bal").textContent = (Number(BigInt(wei)) / 1e18).toFixed(4) + " GEN"; } catch (e) {} }
 const navSet = ["overview","actions","items","payouts","about"];
 const TITLES = { overview:"Overview", actions:"Actions", items:"Items", payouts:"Payouts", about:"About" };
 function navTo(v) { for (const s of navSet) { const sec = byId("v-" + s); if (sec) sec.classList.toggle("hide", s !== v); } document.querySelectorAll(".nav a").forEach((a) => a.classList.toggle("on", a.dataset.view === v)); setText("ptitle", TITLES[v] || v); }
@@ -206,7 +215,7 @@ function doResolve() { if (!needItem()) return; send("resolve_appeal", [itemId()
 function doReverify() { if (!needItem()) return; send("reverify_source", [itemId()], 0n, "reverify_source"); }
 function doAppeal() { if (!needItem() || !needCfg()) return; const note = byId("note").value.trim() || "appeal"; send("appeal", [itemId(), note], BigInt(cfg.appeal_bond), "appeal"); }
 function doFund() { const amt = byId("fund").value.trim(); if (!amt) { setErr("Enter fund amount in wei."); return; } if (!writeClient) { setErr("Connect wallet first."); return; } send("fund_pool", [], BigInt(amt), "fund_pool"); }
-byId("connect").addEventListener("click", connect);
+byId("connect").addEventListener("click", openWallet);
 byId("refresh").addEventListener("click", refreshAll);
 byId("btnCreate").addEventListener("click", doCreate);
 byId("btnIngest").addEventListener("click", doIngest);
@@ -218,10 +227,10 @@ byId("btnReverify").addEventListener("click", doReverify);
 byId("btnAppeal").addEventListener("click", doAppeal);
 byId("btnFund").addEventListener("click", doFund);
 document.querySelectorAll(".nav a").forEach((a) => a.addEventListener("click", () => navTo(a.dataset.view)));
-if (window.ethereum && window.ethereum.on) { window.ethereum.on("accountsChanged", (a) => { account = a && a[0]; byId("wallet").textContent = account ? short(account) : "not connected"; refreshBalance(); }); }
 byId("lnkContract").href = EXPLORER + "/address/" + addr();
 refreshAll();
 setInterval(() => { if (!busy) refreshAll(); }, 8000);
 </script>
+
 </body>
 </html>
