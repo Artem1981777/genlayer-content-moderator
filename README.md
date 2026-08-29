@@ -1,6 +1,6 @@
 # ContentModerator — AI Content Moderation on GenLayer
 
-[![GenLayer](https://img.shields.io/badge/GenLayer-Bradbury%20testnet-6c5ce7)](https://explorer-bradbury.genlayer.com/address/0x20f6e32560427094aC913Da6e900c0b4899AE41A) [![Live dApp](https://img.shields.io/badge/live-dApp-00b894)](https://artem1981777.github.io/genlayer-content-moderator/) [![Registry](https://img.shields.io/badge/registry-v1.1-brightgreen)](CHANGELOG.md) [![Intelligent Contract](https://img.shields.io/badge/Intelligent%20Contract-Python-3776ab)](contracts/registry.py)
+[![GenLayer](https://img.shields.io/badge/GenLayer-Bradbury%20testnet-6c5ce7)](https://explorer-bradbury.genlayer.com/address/0x20f6e32560427094aC913Da6e900c0b4899AE41A) [![Live dApp](https://img.shields.io/badge/live-dApp-00b894)](https://artem1981777.github.io/genlayer-content-moderator/registry.html) [![Registry](https://img.shields.io/badge/registry-v1.1-brightgreen)](CHANGELOG.md) [![Intelligent Contract](https://img.shields.io/badge/Intelligent%20Contract-Python-3776ab)](contracts/registry.py)
 
 > Decentralized content moderation as a GenLayer Intelligent Contract — on-chain community rules, validator-run LLM verdicts finalized by comparative consensus, staking & appeals, and a full on-chain audit trail.
 
@@ -8,7 +8,7 @@
 
 ContentModerator is a GenLayer Intelligent Contract that moderates user-generated content through validator consensus instead of a single trusted moderator. Community rules live on-chain; each decision is produced by an LLM run by every validator and finalized by comparative consensus, with a full on-chain audit trail.
 
-Live demo: https://artem1981777.github.io/genlayer-content-moderator/
+**Live dApp:** https://artem1981777.github.io/genlayer-content-moderator/registry.html
 
 ## Contents
 
