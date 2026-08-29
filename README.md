@@ -4,6 +4,50 @@ ContentModerator is a GenLayer Intelligent Contract that moderates user-generate
 
 Live demo: https://artem1981777.github.io/genlayer-content-moderator/
 
+## Milestone v1 — Multi-item Registry, Staking & Anti-abuse (what's new since v0.5.0)
+
+v0.5.0 moderated a single authenticated item. Milestone v1 turns ContentModerator into a multi-item on-chain registry with a full staking economy, a hardened multi-axis AI prompt, anti-abuse guards, and an interactive dApp. Every consensus-critical decision stays inside the Intelligent Contract; the frontend only reads state and submits transactions.
+
+| What's new | Category | Where |
+| --- | --- | --- |
+| Multi-item registry (`TreeMap` keyed by `item_id`, paginated `get_all_items`) | major feature | `contracts/registry.py` |
+| Staking economy: author stake, reporter bond, appeal bond; forfeit/reward/refund branches; on-chain payout ledger | new functionality | `registry.py` `_settle_stakes` / `get_payouts` |
+| Anti-abuse: self-report ban, per-address caps on open reports & appeals, false-reporter slashing | new functionality | `registry.py` `report`/`appeal`/`enforce` (f73005c) |
+| Prompt-injection hardening + explicit `injection_attempt` axis with auto-FLAG | security | `registry.py` `_compute_verdict` (f73005c) |
+| Tolerant comparative-consensus rationale for borderline content | architecture | `registry.py` (f73005c) |
+| Interactive mission-control dApp (radar/gauge, KPI sparklines, network health, live tx feed, multi-wallet) | major feature | `registry.html` (7da73ab) |
+| New v1.1 deployment on Bradbury (v0.5.0 left untouched) | new deployment | `0x20f6e325...` (f771d18) |
+| Pre-seeded registry across APPROVE/REMOVE, both slashing directions, completed appeal | traction | `seed-registry.mjs` / `finish-seed.mjs` |
+
+### Deployments (Bradbury testnet)
+
+| Version | Address | Status |
+| --- | --- | --- |
+| v1.1 | `0x20f6e32560427094aC913Da6e900c0b4899AE41A` | active (registry + anti-abuse) |
+| v1.0.0 | `0x8F2D6Bf4C1A860E225c36C687c411292fc6c7c5e` | history |
+| v0.5.0 | `0x235F51b11b9F96d6673df37553Ef58373c4324F9` | unchanged (approved) |
+
+- Deploy tx v1.1: `0x1f65dd8891624386b1bd32bbd3b840964bb248b862715fe786a7c343d1d3840a`
+- Owner / operator: `0x198a1952BD58984281f57CF824d264cdbd412814`
+- Author / staker: `0xB596E24480e6a9a54d5303d84791917Bcf8b64D0`
+
+### On-chain traction (registry v1.1)
+
+All states are verifiable via `get_all_items` / `get_payouts`. Explorer: https://explorer-bradbury.genlayer.com
+
+| Item id | Verdict | Stake outcome | Demonstrates |
+| --- | --- | --- | --- |
+| `2511dad838a6b6e9` | APPROVE | author_refund | clean content, stake returned |
+| `6955975a56828c88` | REMOVE | author_forfeit | violation, author loses stake |
+| `d0a8e44b96f114cd` | APPROVE | author_refund + reporter_forfeit | false-reporter slashing (compensation to author) |
+| `3884daf20bdf64dc` | REMOVE (appeal upheld) | author_forfeit + reporter_reward + appeal_forfeit | honest-reporter reward + completed appeal |
+
+Full lifecycle (item `3884daf20bdf64dc`): create `0x3a52f64e...` / ingest `0x8654013d...` / report `0x526bb0dc...` / moderate `0xdde156f6...` / enforce `0x329dd9f9...` / appeal `0xcade26f6...` / resolve_appeal `0x617b94d1...`
+
+Payout ledger (on-chain): `author_refund` 1e12 x2, `false_report_comp` 1e12 to author, `reporter_reward` 1.5e12 to operator.
+
+> Note: the FLAG verdict is fully supported by the contract (top harm-axis score 50-79 maps to FLAG). It is intentionally not force-seeded because borderline content is by design consensus-sensitive, and we do not fabricate on-chain results.
+
 ## v0.5.0 — authenticated ingestion (what changed)
 
 Earlier versions let the operator supply the item id, source, author and content, and verify_content only re-hashed that operator-supplied text. v0.5.0 makes the moderated record authenticated and non-operator-controlled:
