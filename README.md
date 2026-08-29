@@ -19,6 +19,7 @@ Live demo: https://artem1981777.github.io/genlayer-content-moderator/
 - [Lifecycle](#lifecycle)
 - [Live proof](#live-proof-on-genlayer-testnet-bradbury)
 - [Security](#security)
+- [Documentation & verification](#documentation--verification)
 - [Repository layout](#repository-layout)
 - [Run](#run)
 
@@ -120,6 +121,30 @@ Authenticated source fetched in the run:
 - Subjective judgement uses eq_principle comparative consensus; malformed model output defaults to FLAG.
 - Creator-only enforcement and appeal resolution; author-only appeals; strict state-machine guards.
 - Authenticated, immutable record: no operator overwrite path; verify_content and reverify_source provide tamper and live-source checks.
+
+## Documentation & verification
+
+Everything added on top of the approved v0.5.0, in one place — what each artifact does and where to verify it, so reviewers can follow a single page instead of a wall of links.
+
+### Deep-dive docs
+- **[SECURITY.md](SECURITY.md)** — threat model: prompt-injection defenses (untrusted-data markers, verbatim-only extraction, explicit `injection_attempt` axis with auto-FLAG), staking / anti-abuse invariants (self-report ban, per-address caps on open reports & appeals, false-reporter slashing), and owner-only enforcement.
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — contract layout and data model (`TreeMap[str,str]` registry keyed by `item_id`, on-chain payout ledger), the moderation lifecycle, and the strict contract/frontend boundary — all consensus-critical logic stays inside the Intelligent Contract.
+- **[CHANGELOG.md](CHANGELOG.md)** — every change since v0.5.0 grouped by category (security / architecture / new functionality / new deployment / traction / dApp), each linked to its commit.
+
+### Adversarial / prompt-injection test suite
+The contract fetches live web content, so prompt-injection is the primary attack surface. This suite proves the defense end-to-end, on-chain:
+- **[adversarial-seed.mjs](adversarial-seed.mjs)** — for each injection fixture it runs the full lifecycle (`create_item` -> `ingest` -> `moderate` -> `enforce`) against the v1.1 registry and asserts the attempt is caught (`injection_detected` true and verdict in {FLAG, REMOVE}). Results are written to `registry-adversarial.json`.
+- Live fixtures (served from GitHub Pages — the exact HTML the contract ingests):
+  - **[inject-basic.html](https://artem1981777.github.io/genlayer-content-moderator/fixtures/inject-basic.html)** — benign-looking post carrying an inline instruction-override payload ("ignore previous instructions...").
+  - **[inject-canary.html](https://artem1981777.github.io/genlayer-content-moderator/fixtures/inject-canary.html)** — attempt to smuggle an override/canary token to force an APPROVE.
+  - **[inject-roleplay.html](https://artem1981777.github.io/genlayer-content-moderator/fixtures/inject-roleplay.html)** — roleplay / jailbreak-style prompt trying to escape the moderation instructions.
+
+### Interactive dApp (mission-control)
+- **Live:** [registry.html](https://artem1981777.github.io/genlayer-content-moderator/registry.html) · source: **[registry.html](registry.html)**
+- One-click **guided cycles** — Judge (create -> ingest -> moderate -> enforce) and Steward (resolve an appealed item) — plus **RPC retry** on transient errors (retries only before broadcast, so no double-send) and a **post-transaction status reread** that surfaces the new item status/verdict. The dApp only reads state and submits transactions; every verdict is computed in the contract.
+
+### v1.1 Intelligent Contract
+- **[contracts/registry.py](contracts/registry.py)** — the v1.1 registry (commit [`f73005c`](https://github.com/Artem1981777/genlayer-content-moderator/commit/f73005c)): multi-item registry, staking economy, hardened multi-axis prompt, and anti-abuse guards.
 
 ## Repository layout
 
