@@ -5,9 +5,11 @@ All notable changes to **ContentModerator**. Commit links point to the repositor
 ## [v1.1] — 2026-08-29 — Multi-item Registry, Staking & Anti-abuse
 
 ### Security
+- Documented the full threat model in `SECURITY.md` (attack -> cost -> defense matrix mapped to `contracts/registry.py` line references) — [2472e8b](https://github.com/Artem1981777/genlayer-content-moderator/commit/2472e8b)
 - Prompt-injection hardening and an explicit `injection_attempt` harm axis with auto-FLAG on detected injection — [f73005c](https://github.com/Artem1981777/genlayer-content-moderator/commit/f73005c)
 
 ### Architecture
+- Added `ARCHITECTURE.md`: mermaid item-lifecycle state machine, state-transition table, consensus sequence diagram, and stake-economics matrix — [e00a7fc](https://github.com/Artem1981777/genlayer-content-moderator/commit/e00a7fc)
 - Tolerant comparative-consensus rationale so borderline content resolves without brittle exact-match consensus — [f73005c](https://github.com/Artem1981777/genlayer-content-moderator/commit/f73005c)
 
 ### New functionality
