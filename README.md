@@ -1,8 +1,26 @@
 # ContentModerator — AI Content Moderation on GenLayer
 
+[![GenLayer](https://img.shields.io/badge/GenLayer-Bradbury%20testnet-6c5ce7)](https://explorer-bradbury.genlayer.com/address/0x20f6e32560427094aC913Da6e900c0b4899AE41A) [![Live dApp](https://img.shields.io/badge/live-dApp-00b894)](https://artem1981777.github.io/genlayer-content-moderator/) [![Registry](https://img.shields.io/badge/registry-v1.1-brightgreen)](CHANGELOG.md) [![Intelligent Contract](https://img.shields.io/badge/Intelligent%20Contract-Python-3776ab)](contracts/registry.py)
+
+> Decentralized content moderation as a GenLayer Intelligent Contract — on-chain community rules, validator-run LLM verdicts finalized by comparative consensus, staking & appeals, and a full on-chain audit trail.
+
+📚 Deep dives: [Security model](SECURITY.md) · [Architecture](ARCHITECTURE.md) · [Changelog](CHANGELOG.md)
+
 ContentModerator is a GenLayer Intelligent Contract that moderates user-generated content through validator consensus instead of a single trusted moderator. Community rules live on-chain; each decision is produced by an LLM run by every validator and finalized by comparative consensus, with a full on-chain audit trail.
 
 Live demo: https://artem1981777.github.io/genlayer-content-moderator/
+
+## Contents
+
+- [Milestone v1 — what's new since v0.5.0](#milestone-v1--multi-item-registry-staking--anti-abuse-whats-new-since-v050)
+- [Deployments](#deployments-bradbury-testnet)
+- [On-chain traction](#on-chain-traction-registry-v11)
+- [v0.5.0 — authenticated ingestion](#v050--authenticated-ingestion-what-changed)
+- [Lifecycle](#lifecycle)
+- [Live proof](#live-proof-on-genlayer-testnet-bradbury)
+- [Security](#security)
+- [Repository layout](#repository-layout)
+- [Run](#run)
 
 ## Milestone v1 — Multi-item Registry, Staking & Anti-abuse (what's new since v0.5.0)
 
