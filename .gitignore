@@ -8,3 +8,4 @@ contract.txt
 *-tx.txt
 .env
 *.v12bak
+*.bak
