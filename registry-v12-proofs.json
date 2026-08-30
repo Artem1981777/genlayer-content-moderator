@@ -1,0 +1,77 @@
+{
+  "address": "0x62A9196dBB55585840D13631aB7C68288761a74A",
+  "explorer": "https://explorer-bradbury.genlayer.com",
+  "generated": "2026-08-30T10:06:09.501Z",
+  "item_states": [
+    {
+      "id": "cbb02ef9704daefa",
+      "status": "enforced",
+      "reporter": "",
+      "author": "0xB596E24480e6a9a54d5303d84791917Bcf8b64D0",
+      "verdict": "REMOVE"
+    },
+    {
+      "id": "bbefb4bc263fa290",
+      "status": "created",
+      "reporter": "",
+      "author": "",
+      "verdict": ""
+    },
+    {
+      "id": "10a85ad944caf605",
+      "status": "created",
+      "reporter": "",
+      "author": "",
+      "verdict": ""
+    },
+    {
+      "id": "e6fd5d510ba6cb9e",
+      "status": "created",
+      "reporter": "",
+      "author": "",
+      "verdict": ""
+    },
+    {
+      "id": "1cc1832fc0fe4ad9",
+      "status": "appealed",
+      "reporter": "",
+      "author": "0xB596E24480e6a9a54d5303d84791917Bcf8b64D0",
+      "verdict": "APPROVE"
+    },
+    {
+      "id": "1d0fbb2a15b24b56",
+      "status": "created",
+      "reporter": "",
+      "author": "",
+      "verdict": ""
+    },
+    {
+      "id": "cce1a7b9219288b4",
+      "status": "created",
+      "reporter": "",
+      "author": "",
+      "verdict": ""
+    }
+  ],
+  "results": [
+    {
+      "test": "#1 re-roll by non-owner rejected (item cbb02ef9704daefa, status enforced)",
+      "pass": true,
+      "how": "onchain-FINISHED_WITH_ERROR",
+      "tx": "0x4d9a2449fbef3f73c18282c12a99313e5c8b404ec5c62708e76eb52e4092669b",
+      "explorer": "https://explorer-bradbury.genlayer.com/tx/0x4d9a2449fbef3f73c18282c12a99313e5c8b404ec5c62708e76eb52e4092669b"
+    },
+    {
+      "test": "#3/P2 report on ENFORCED rejected (item cbb02ef9704daefa)",
+      "pass": true,
+      "how": "onchain-FINISHED_WITH_ERROR",
+      "tx": "0x23163f4d42de22c04ad6fba197133ace0204107fc3b185f036153ed5fc91b4eb",
+      "explorer": "https://explorer-bradbury.genlayer.com/tx/0x23163f4d42de22c04ad6fba197133ace0204107fc3b185f036153ed5fc91b4eb"
+    },
+    {
+      "test": "#2 report path open",
+      "pass": null,
+      "how": "no-reportable-target"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # ContentModerator — AI Content Moderation on GenLayer
 
-[![GenLayer](https://img.shields.io/badge/GenLayer-Bradbury%20testnet-6c5ce7)](https://explorer-bradbury.genlayer.com/address/0x62A9196dBB55585840D13631aB7C68288761a74A) [![Live dApp](https://img.shields.io/badge/live-dApp-00b894)](https://artem1981777.github.io/genlayer-content-moderator/registry.html) [![Registry](https://img.shields.io/badge/registry-v1.2-brightgreen)](CHANGELOG.md) [![Intelligent Contract](https://img.shields.io/badge/Intelligent%20Contract-Python-3776ab)](contracts/registry.py)
+[![GenLayer](https://img.shields.io/badge/GenLayer-Bradbury%20testnet-6c5ce7)](https://explorer-bradbury.genlayer.com/address/0x20f6e32560427094aC913Da6e900c0b4899AE41A) [![Live dApp](https://img.shields.io/badge/live-dApp-00b894)](https://artem1981777.github.io/genlayer-content-moderator/) [![Registry](https://img.shields.io/badge/registry-v1.1-brightgreen)](CHANGELOG.md) [![Intelligent Contract](https://img.shields.io/badge/Intelligent%20Contract-Python-3776ab)](contracts/registry.py)
 
 > Decentralized content moderation as a GenLayer Intelligent Contract — on-chain community rules, validator-run LLM verdicts finalized by comparative consensus, staking & appeals, and a full on-chain audit trail.
 
@@ -8,7 +8,7 @@
 
 ContentModerator is a GenLayer Intelligent Contract that moderates user-generated content through validator consensus instead of a single trusted moderator. Community rules live on-chain; each decision is produced by an LLM run by every validator and finalized by comparative consensus, with a full on-chain audit trail.
 
-**Live dApp:** https://artem1981777.github.io/genlayer-content-moderator/registry.html
+Live demo: https://artem1981777.github.io/genlayer-content-moderator/
 
 ## Contents
 
@@ -19,7 +19,6 @@ ContentModerator is a GenLayer Intelligent Contract that moderates user-generate
 - [Lifecycle](#lifecycle)
 - [Live proof](#live-proof-on-genlayer-testnet-bradbury)
 - [Security](#security)
-- [Documentation & verification](#documentation--verification)
 - [Repository layout](#repository-layout)
 - [Run](#run)
 
@@ -42,30 +41,13 @@ v0.5.0 moderated a single authenticated item. Milestone v1 turns ContentModerato
 
 | Version | Address | Status |
 | --- | --- | --- |
-| v1.2 | `0x62A9196dBB55585840D13631aB7C68288761a74A` | active (economic hardening) |
-| v1.1 | `0x20f6e32560427094aC913Da6e900c0b4899AE41A` | history (registry + anti-abuse) |
+| v1.1 | `0x20f6e32560427094aC913Da6e900c0b4899AE41A` | active (registry + anti-abuse) |
 | v1.0.0 | `0x8F2D6Bf4C1A860E225c36C687c411292fc6c7c5e` | history |
 | v0.5.0 | `0x235F51b11b9F96d6673df37553Ef58373c4324F9` | unchanged (approved) |
 
-- Deploy tx v1.2: `0x3f93bb9574627afdc0bd41caa79e0b8e329004b7098915ad0c9de61db0425c47`
 - Deploy tx v1.1: `0x1f65dd8891624386b1bd32bbd3b840964bb248b862715fe786a7c343d1d3840a`
 - Owner / operator: `0x198a1952BD58984281f57CF824d264cdbd412814`
 - Author / staker: `0xB596E24480e6a9a54d5303d84791917Bcf8b64D0`
-
-### Economic hardening (v1.2.0)
-
-v1.2.0 is a minimal, surgical hardening of the v1.1 state machine — no architecture, consensus, ingest, or dApp-logic changes. Redeployed to Bradbury as `0x62A9196dBB55585840D13631aB7C68288761a74A` (deploy tx [`0x3f93bb95`](https://explorer-bradbury.genlayer.com/tx/0x3f93bb9574627afdc0bd41caa79e0b8e329004b7098915ad0c9de61db0425c47)).
-
-| Hardening | Guarantee | Live proof (Bradbury) |
-| --- | --- | --- |
-| Re-roll gate on `moderate()` | a moderated verdict cannot be re-rolled by a non-owner without an active report | reverted re-roll [`0x4d9a2449`](https://explorer-bradbury.genlayer.com/tx/0x4d9a2449fbef3f73c18282c12a99313e5c8b404ec5c62708e76eb52e4092669b) |
-| `report()` excludes `enforced` | a reporter bond can no longer be stranded on an already-enforced item | reverted report-on-enforced [`0x23163f4d`](https://explorer-bradbury.genlayer.com/tx/0x23163f4d42de22c04ad6fba197133ace0204107fc3b185f036153ed5fc91b4eb) |
-| permissionless `enforce()` after `ENFORCE_TIMEOUT_SEC` | staked value cannot be frozen by an inactive owner | permissionless enforce [`0xf12ed266`](https://explorer-bradbury.genlayer.com/tx/0xf12ed266f0777bb0a0d4e09b783e55d0bfda7c61403af2f37d3281d18c94cab0) |
-| `reclaim_appeal()` after `APPEAL_TIMEOUT_SEC` | an appellant always recovers the bond if the owner never resolves | reclaim by timeout [`0x34df52e8`](https://explorer-bradbury.genlayer.com/tx/0x34df52e8d08e4018d8188db8414db1287ba0d8cea664c2f95456794d8a51a88d) |
-| per-call canary token (`_canary_token`) | a leaked static canary can no longer be echoed to bypass injection detection | SECURITY.md #6 |
-| masked public content (`_public_item`) | blocked/limited content is not re-served via `get_item`/`get_all_items` | SECURITY.md #4 |
-
-Both timeout proofs were produced on a dedicated demo instance `0xf481F23BAb92117d0C424a7cCB047c78B17471B2` with shortened constants (`ENFORCE_TIMEOUT_SEC=APPEAL_TIMEOUT_SEC=60`), so the permissionless paths are verifiable without waiting the production 24h/48h windows; production v1.2 keeps 86400/172800 s. Raw evidence: `registry-demo-evidence.json`, `registry-v12-proofs.json`.
 
 ### On-chain traction (registry v1.1)
 
@@ -138,30 +120,6 @@ Authenticated source fetched in the run:
 - Subjective judgement uses eq_principle comparative consensus; malformed model output defaults to FLAG.
 - Creator-only enforcement and appeal resolution; author-only appeals; strict state-machine guards.
 - Authenticated, immutable record: no operator overwrite path; verify_content and reverify_source provide tamper and live-source checks.
-
-## Documentation & verification
-
-Everything added on top of the approved v0.5.0, in one place — what each artifact does and where to verify it, so reviewers can follow a single page instead of a wall of links.
-
-### Deep-dive docs
-- **[SECURITY.md](SECURITY.md)** — threat model: prompt-injection defenses (untrusted-data markers, verbatim-only extraction, explicit `injection_attempt` axis with auto-FLAG), staking / anti-abuse invariants (self-report ban, per-address caps on open reports & appeals, false-reporter slashing), and owner-only enforcement.
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** — contract layout and data model (`TreeMap[str,str]` registry keyed by `item_id`, on-chain payout ledger), the moderation lifecycle, and the strict contract/frontend boundary — all consensus-critical logic stays inside the Intelligent Contract.
-- **[CHANGELOG.md](CHANGELOG.md)** — every change since v0.5.0 grouped by category (security / architecture / new functionality / new deployment / traction / dApp), each linked to its commit.
-
-### Adversarial / prompt-injection test suite
-The contract fetches live web content, so prompt-injection is the primary attack surface. This suite proves the defense end-to-end, on-chain:
-- **[adversarial-seed.mjs](adversarial-seed.mjs)** — for each injection fixture it runs the full lifecycle (`create_item` -> `ingest` -> `moderate` -> `enforce`) against the v1.1 registry and asserts the attempt is caught (`injection_detected` true and verdict in {FLAG, REMOVE}). Results are written to `registry-adversarial.json`.
-- Live fixtures (served from GitHub Pages — the exact HTML the contract ingests):
-  - **[inject-basic.html](https://artem1981777.github.io/genlayer-content-moderator/fixtures/inject-basic.html)** — benign-looking post carrying an inline instruction-override payload ("ignore previous instructions...").
-  - **[inject-canary.html](https://artem1981777.github.io/genlayer-content-moderator/fixtures/inject-canary.html)** — attempt to smuggle an override/canary token to force an APPROVE.
-  - **[inject-roleplay.html](https://artem1981777.github.io/genlayer-content-moderator/fixtures/inject-roleplay.html)** — roleplay / jailbreak-style prompt trying to escape the moderation instructions.
-
-### Interactive dApp (mission-control)
-- **Live:** [registry.html](https://artem1981777.github.io/genlayer-content-moderator/registry.html) · source: **[registry.html](registry.html)**
-- One-click **guided cycles** — Judge (create -> ingest -> moderate -> enforce) and Steward (resolve an appealed item) — plus **RPC retry** on transient errors (retries only before broadcast, so no double-send) and a **post-transaction status reread** that surfaces the new item status/verdict. The dApp only reads state and submits transactions; every verdict is computed in the contract.
-
-### Intelligent Contract (v1.2 active, lineage from v1.1)
-- **[contracts/registry.py](contracts/registry.py)** — the v1.1 registry (commit [`f73005c`](https://github.com/Artem1981777/genlayer-content-moderator/commit/f73005c)): multi-item registry, staking economy, hardened multi-axis prompt, and anti-abuse guards.
 
 ## Repository layout
 

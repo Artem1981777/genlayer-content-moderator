@@ -1,0 +1,56 @@
+{
+  "address": "0x62A9196dBB55585840D13631aB7C68288761a74A",
+  "results": [
+    {
+      "test": "T1: duplicate active URL rejected (#7)",
+      "pass": false,
+      "how": "executed",
+      "tx": "0x4a59150f9d9b3f7b1edede84662843583ad0de080022ccd75da094211c6eb90a"
+    },
+    {
+      "test": "T2: moderate reached 'moderated'",
+      "pass": true,
+      "how": "assert"
+    },
+    {
+      "test": "T2: re-roll by non-owner blocked (#1)",
+      "pass": true,
+      "how": "exec-revert"
+    },
+    {
+      "test": "T2: non-owner enforce before timeout blocked (#2)",
+      "pass": true,
+      "how": "exec-revert"
+    },
+    {
+      "test": "T2: owner enforce -> enforced (network-health control)",
+      "pass": true,
+      "how": "assert"
+    },
+    {
+      "test": "T2: FLAG partial forfeit (#5)",
+      "pass": null,
+      "how": "verdict-APPROVE"
+    },
+    {
+      "test": "T2: content masking (#9)",
+      "pass": null,
+      "how": "verdict-APPROVE"
+    },
+    {
+      "test": "T2: report on enforced blocked (#3)",
+      "pass": true,
+      "how": "exec-revert"
+    },
+    {
+      "test": "T2: reclaim before appeal timeout blocked (#2)",
+      "pass": true,
+      "how": "exec-revert"
+    }
+  ],
+  "totals": {
+    "pass": 6,
+    "fail": 1,
+    "skip": 2
+  }
+}

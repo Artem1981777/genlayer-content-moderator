@@ -1,0 +1,52 @@
+{
+  "address": "0x20f6e32560427094aC913Da6e900c0b4899AE41A",
+  "rec": {
+    "label": "flag_mild",
+    "item_id": "baa0564fe982da8f"
+  },
+  "txs": {
+    "create": "0x21feca162c6e70ef8763c56e06a23d0f68279f920485acd26b028ab4c3f49db8",
+    "ingest_r1": "0x584751a0c8e1fa1f90ae33255a52ef782c9651612dae784b008e7ba0d19788cf",
+    "ingest_r2": "0x9df6913382b3fef3a2ba12f86522db472d98d6444d3b94e32fc81fdc23d70028",
+    "ingest_r3": "0x4962202a3813b07c0abd31358f375b87986d87e47533010469c40f1b51304d4b",
+    "ingest_r4": "0xccda73b7c753f7d020e61d45d45ca616feadf8c48f8b3d3fe96485a3ca524acd"
+  },
+  "lastItem": {
+    "id": "baa0564fe982da8f",
+    "source": "",
+    "creator": "0x198a1952BD58984281f57CF824d264cdbd412814",
+    "author": "",
+    "reporter": "",
+    "rules": "No scams, fraud, or financial schemes. No requests for private keys, wallet seed phrases, or credentials. No spam or advertising. No harassment, no hate speech, no violence.",
+    "content": "",
+    "content_hash": "",
+    "status": "created",
+    "verdict": "",
+    "reason": "",
+    "category": "",
+    "confidence": 0,
+    "severity": "none",
+    "axis_scores": {},
+    "injection_detected": false,
+    "escalated": false,
+    "needs_review": false,
+    "enforced": false,
+    "blocked": false,
+    "limited": false,
+    "enforcement_action": "none",
+    "appeal_note": "",
+    "appeal_outcome": "",
+    "author_stake": "0",
+    "reporter_bond": "0",
+    "appeal_stake": "0",
+    "stake_outcome": "",
+    "history": [
+      {
+        "n": 0,
+        "action": "create_item",
+        "by": "0x198a1952BD58984281f57CF824d264cdbd412814",
+        "note": "Item created"
+      }
+    ]
+  }
+}

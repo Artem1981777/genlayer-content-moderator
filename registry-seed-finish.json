@@ -1,0 +1,68 @@
+{
+  "address": "0x20f6e32560427094aC913Da6e900c0b4899AE41A",
+  "network": "bradbury",
+  "explorer": "https://explorer-bradbury.genlayer.com",
+  "summary": [
+    {
+      "label": "reward_appeal",
+      "item_id": "3884daf20bdf64dc",
+      "verdict": "REMOVE",
+      "category": "scam",
+      "confidence": 100,
+      "stake_outcome": "author_forfeit+reporter_reward+appeal_forfeit",
+      "enforcement": "removed",
+      "appeal_outcome": "upheld",
+      "verdict_after": "REMOVE",
+      "ok": true
+    },
+    {
+      "label": "flag_mild",
+      "item_id": "23155046c3234aac",
+      "ok": false,
+      "error": "exec failed moderate: FINISHED_WITH_ERROR"
+    }
+  ],
+  "txs": {
+    "A_create": "0x3a52f64e4c56f036ccc677910aecd9b9d86e06f871dcdd0029fc0d9aeae6300e",
+    "A_ingest": "0x8654013d711fe7e51ed6d4d37a0c3edf33c51886b3204963c44aaafb81d39ecf",
+    "A_report": "0x526bb0dc6468a6cc9ff383dd21f4144bb3a59be62b2328272bd1e1f09754f056",
+    "A_moderate": "0xdde156f64a11dc4394e5040aae1a6b154563f4a9072999dbc34d6a31078eda20",
+    "A_enforce": "0x329dd9f968993e29f88658ab7fb07acae283cda03a540e2258f5b631a0ffc6b2",
+    "A_appeal": "0xcade26f6e9ae9aabfdf427063765407b246edf9862ee746773a866ffcce9415c",
+    "A_resolve": "0x617b94d16e593c977ff8aab975c055a205eb36e99ce19f53a9f35ddcc4796c4b",
+    "B_create": "0xc3a4e8af602f0eca8bef7363d3baf748a73dbe228f264a29eaa199bb7808df90",
+    "B_ingest": "0xb6071b61a9f116ada04da6263c087682ec64f953f151e6f62fb88b1efdae0056"
+  },
+  "payouts": [
+    {
+      "to": "0xB596E24480e6a9a54d5303d84791917Bcf8b64D0",
+      "amount": "1000000000000",
+      "reason": "author_refund"
+    },
+    {
+      "to": "0xB596E24480e6a9a54d5303d84791917Bcf8b64D0",
+      "amount": "1000000000000",
+      "reason": "author_refund"
+    },
+    {
+      "to": "0xB596E24480e6a9a54d5303d84791917Bcf8b64D0",
+      "amount": "1000000000000",
+      "reason": "false_report_comp"
+    },
+    {
+      "to": "0x198a1952BD58984281f57CF824d264cdbd412814",
+      "amount": "1500000000000",
+      "reason": "reporter_reward"
+    }
+  ],
+  "total": 7,
+  "config": {
+    "owner": "0x198a1952BD58984281f57CF824d264cdbd412814",
+    "default_rules": "No spam or advertising. No scams, phishing, or requests for private keys or seed phrases. No hate speech or harassment. No violence or threats. APPROVE compliant content, FLAG borderline content, REMOVE clear violations.",
+    "min_stake": "1000000000000",
+    "report_bond": "1000000000000",
+    "appeal_bond": "2000000000000",
+    "pool": "13500000000000",
+    "item_count": 7
+  }
+}

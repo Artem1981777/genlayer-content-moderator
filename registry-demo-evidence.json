@@ -1,0 +1,17 @@
+{
+  "demo_instance": "0xf481F23BAb92117d0C424a7cCB047c78B17471B2",
+  "note": "Dedicated DEMO instance with ENFORCE_TIMEOUT_SEC=60 and APPEAL_TIMEOUT_SEC=60. Production v1.2 (0x62A9196dBB55585840D13631aB7C68288761a74A) keeps 86400/172800. This instance exists ONLY to produce live positive-path timeout proofs.",
+  "demo_deploy_tx": "0x5f41b18eb5baca97f848b2697ebc81b0c72fe9fe966896051abd4279dcc5dd4e",
+  "permissionless_enforce_tx": "0xf12ed266f0777bb0a0d4e09b783e55d0bfda7c61403af2f37d3281d18c94cab0",
+  "permissionless_enforce_item": "bde0759e8c2ab8a1",
+  "reclaim_appeal_tx": "0x34df52e8d08e4018d8188db8414db1287ba0d8cea664c2f95456794d8a51a88d",
+  "reclaim_appeal_item": "bde0759e8c2ab8a1",
+  "reclaim_appeal_outcome": "reclaimed_timeout",
+  "reclaim_final_status": "enforced",
+  "explorer": {
+    "address": "https://explorer-bradbury.genlayer.com/address/0xf481F23BAb92117d0C424a7cCB047c78B17471B2",
+    "deploy": "https://explorer-bradbury.genlayer.com/tx/0x5f41b18eb5baca97f848b2697ebc81b0c72fe9fe966896051abd4279dcc5dd4e",
+    "permissionless_enforce": "https://explorer-bradbury.genlayer.com/tx/0xf12ed266f0777bb0a0d4e09b783e55d0bfda7c61403af2f37d3281d18c94cab0",
+    "reclaim_appeal": "https://explorer-bradbury.genlayer.com/tx/0x34df52e8d08e4018d8188db8414db1287ba0d8cea664c2f95456794d8a51a88d"
+  }
+}

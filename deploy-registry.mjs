@@ -9,7 +9,7 @@ const source = readFileSync("contracts/registry.py", "utf8");
 const code = new TextEncoder().encode(source);
 const account = createAccount(PRIVATE_KEY);
 const client = createClient({ chain: testnetBradbury, account });
-console.log("Deploying ContentModeratorRegistry v1.1...");
+console.log("Deploying ContentModeratorRegistry v1.2...");
 const txHash = await client.deployContract({ code, args: [RULES] });
 console.log("deploy tx:", txHash);
 await client.waitForTransactionReceipt({ hash: txHash, status: TransactionStatus.ACCEPTED, retries: 300 });

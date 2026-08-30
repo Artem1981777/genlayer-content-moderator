@@ -1,0 +1,136 @@
+{
+  "address": "0x20f6e32560427094aC913Da6e900c0b4899AE41A",
+  "network": "bradbury",
+  "explorer": "https://explorer-bradbury.genlayer.com",
+  "owner": "0x198a1952BD58984281f57CF824d264cdbd412814",
+  "author": "0xB596E24480e6a9a54d5303d84791917Bcf8b64D0",
+  "config": {
+    "owner": "0x198a1952BD58984281f57CF824d264cdbd412814",
+    "default_rules": "No spam or advertising. No scams, phishing, or requests for private keys or seed phrases. No hate speech or harassment. No violence or threats. APPROVE compliant content, FLAG borderline content, REMOVE clear violations.",
+    "min_stake": "1000000000000",
+    "report_bond": "1000000000000",
+    "appeal_bond": "2000000000000",
+    "pool": "11000000000000",
+    "item_count": 5
+  },
+  "summary": [
+    {
+      "label": "approve_clean",
+      "url": "https://artem1981777.github.io/genlayer-content-moderator/fixtures/benign.html",
+      "item_id": "2511dad838a6b6e9",
+      "verdict": "APPROVE",
+      "category": "scam",
+      "confidence": 100,
+      "injection": false,
+      "axes": {
+        "harassment": 0,
+        "hate": 0,
+        "injection_attempt": 0,
+        "scam": 0,
+        "self_harm": 0,
+        "sexual": 0,
+        "spam": 0,
+        "violence": 0
+      },
+      "stake_outcome": "author_refund",
+      "enforcement": "none",
+      "ok": true
+    },
+    {
+      "label": "remove_reported",
+      "url": "https://artem1981777.github.io/genlayer-content-moderator/fixtures/scam.html",
+      "item_id": "6955975a56828c88",
+      "ok": false,
+      "error": "exec failed report: FINISHED_WITH_ERROR"
+    },
+    {
+      "label": "flag_spam",
+      "url": "https://artem1981777.github.io/genlayer-content-moderator/fixtures/borderline.html",
+      "item_id": "6955975a56828c88",
+      "verdict": "REMOVE",
+      "category": "spam",
+      "confidence": 90,
+      "injection": false,
+      "axes": {
+        "harassment": 0,
+        "hate": 0,
+        "injection_attempt": 0,
+        "scam": 20,
+        "self_harm": 0,
+        "sexual": 0,
+        "spam": 95,
+        "violence": 0
+      },
+      "stake_outcome": "author_forfeit",
+      "enforcement": "removed",
+      "ok": true
+    },
+    {
+      "label": "remove_appealed",
+      "url": "https://artem1981777.github.io/genlayer-content-moderator/fixtures/scam.html",
+      "item_id": "bb3b51424b36d380",
+      "ok": false,
+      "error": "exec failed report: FINISHED_WITH_ERROR"
+    },
+    {
+      "label": "approve_falsereport",
+      "url": "https://artem1981777.github.io/genlayer-content-moderator/fixtures/benign.html",
+      "item_id": "d0a8e44b96f114cd",
+      "verdict": "APPROVE",
+      "category": "scam",
+      "confidence": 100,
+      "injection": false,
+      "axes": {
+        "harassment": 0,
+        "hate": 0,
+        "injection_attempt": 0,
+        "scam": 0,
+        "self_harm": 0,
+        "sexual": 0,
+        "spam": 0,
+        "violence": 0
+      },
+      "stake_outcome": "author_refund+reporter_forfeit",
+      "enforcement": "none",
+      "ok": true
+    }
+  ],
+  "txs": {
+    "fund": "0x3f93ab479cf04d7476b98064caeb829fef0d460ae00f1aab6e55ea9693a43fd2",
+    "approve_clean_create": "0x111cbabc70b4c10124c55e1ff4c3e78002f571f2c825bd126429d4a248d87b7a",
+    "approve_clean_ingest": "0x7b3ab288b536deaa7a20cc217bcd6469cc2eea988206e69ba7e1ec473609d6fe",
+    "approve_clean_moderate": "0xc1358302d87ffe698be116bb3096972b5925c88234394024d04e522f066f0715",
+    "approve_clean_enforce": "0x4477a27d7ac6d2b4b8d5bdb5dbcba91796d5cdc6ff0b4863afc77712adb49208",
+    "remove_reported_create": "0xc4291cdf33dd57405e1454fc48de4b16dbd08200609f8fbde3225bf08b64aa58",
+    "remove_reported_ingest": "0xc0caf3e1faf2a449fc128aed6fc314df6bed702230214e74aa6a7afb1789b1ce",
+    "flag_spam_create": "0xb3b34613f94d5d6c0cadec1290aa4d1f9f4db6d3c42dadd2b8b4844ed39b65f2",
+    "flag_spam_ingest": "0xa08998201c63b2198d7a6e5be715fe12483f8bdf2a2afad226471d4eb572ce3c",
+    "flag_spam_moderate": "0xb579eb507d0d769dcb35e0f33d2171950695bfa43e711d14bd440bc5d40103f3",
+    "flag_spam_enforce": "0x55cb41066a6976eabc725e17abc2f93cf9e29094bab45d68088583864efc0999",
+    "remove_appealed_create": "0xcb8fbb5fc42a58afaf9ca232198330f9b291d85f86a3a68fbcdefa58b90c3afc",
+    "remove_appealed_ingest": "0x48a348458b233c4c33dfaeaf8c5b9c267f6575542b4386999cd11f29b6a06a05",
+    "approve_falsereport_create": "0x460a4bca114b197ae98276003afb86f39d12f2aa0b776333107b18785d0949c4",
+    "approve_falsereport_ingest": "0xc58019aa0c7776c7df63673bf0c059b8348063735153a1a8eb8f1b6efcca9213",
+    "approve_falsereport_report": "0xd008ccc3c0e76d398ee399ea4d1cd3f5ac817cfc6d299daae07f31a2d8b87cba",
+    "approve_falsereport_moderate": "0x630609985f4977746fc8465a084e0d227fd201d2cc50aed6dda5c6b5cf4a38e6",
+    "approve_falsereport_enforce": "0x26823055e07fc8bbecec23a7e059979ad09d0ecf892fdc53bb5a011c0378570e"
+  },
+  "payouts": [
+    {
+      "to": "0xB596E24480e6a9a54d5303d84791917Bcf8b64D0",
+      "amount": "1000000000000",
+      "reason": "author_refund"
+    },
+    {
+      "to": "0xB596E24480e6a9a54d5303d84791917Bcf8b64D0",
+      "amount": "1000000000000",
+      "reason": "author_refund"
+    },
+    {
+      "to": "0xB596E24480e6a9a54d5303d84791917Bcf8b64D0",
+      "amount": "1000000000000",
+      "reason": "false_report_comp"
+    }
+  ],
+  "total": 5
+}

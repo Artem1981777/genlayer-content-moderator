@@ -225,7 +225,7 @@ import { TransactionStatus } from "https://esm.sh/genlayer-js/types";
 const EXPLORER = "https://explorer-bradbury.genlayer.com";
 const RPC = "https://rpc-bradbury.genlayer.com";
 const CHAIN_HEX = "0x107d";
-const REGISTRY = "0x62A9196dBB55585840D13631aB7C68288761a74A";
+const REGISTRY = "0x20f6e32560427094aC913Da6e900c0b4899AE41A";
 const FIX = "https://artem1981777.github.io/genlayer-content-moderator/fixtures/";
 const AXES = ["scam","spam","harassment","hate","violence","sexual","self_harm"];
 const readClient = createClient({ chain: testnetBradbury });
@@ -282,7 +282,7 @@ function drawGauge(c, it) { if (!c) return; const x = c.getContext("2d"), w = c.
 function showVerdict(it) { lastVerdictItem = it; setText("verdictTitle", "Item " + short(it.id) + (it.category && it.category !== "none" ? " · " + it.category : "")); const b = byId("verdictBadge"); b.className = "badge " + verdictClass(it.verdict); b.textContent = String(it.verdict || "PENDING").toUpperCase(); drawRadar(byId("radar"), it); drawGauge(byId("gauge"), it); }
 function tlRow(kind, label, hash, ms) { const tl = byId("timeline"); const em = tl.querySelector(".empty"); if (em) em.remove(); const row = el("div", "tlrow"); const cls = kind === "confirmed" ? "bapprove" : kind === "failed" ? "bremove" : "bflag"; const st = el("span", "badge " + cls, kind); const time = el("span", "mut", " " + new Date().toLocaleTimeString() + (ms ? " · " + ms + "ms" : "")); const r1 = el("div", "row"); r1.appendChild(st); r1.appendChild(el("b", null, " " + label)); r1.appendChild(time); row.appendChild(r1); if (hash) { const a = el("a", "mono", short(hash)); a.href = EXPLORER + "/tx/" + hash; a.target = "_blank"; const cp = el("span", "copy", "copy"); cp.style.marginLeft = "8px"; cp.addEventListener("click", () => copy(hash)); const r2 = el("div"); r2.style.marginTop = "4px"; r2.appendChild(a); r2.appendChild(cp); row.appendChild(r2); } tl.insertBefore(row, tl.firstChild); return row; }
 function loadBtn(id, on) { const b = byId(id); if (!b) return; if (on) { b.dataset.html = b.innerHTML; b.innerHTML = ""; b.appendChild(el("span", "spin")); } else if (b.dataset.html !== undefined) { b.innerHTML = b.dataset.html; } }
-async function send(fn, args, value, label, btnId) { if (busy) return; if (!writeClient) { setErr("Connect your wallet first."); return; } if (!(await guardNetwork())) { setErr(label + " blocked — wrong network. NOT sent."); return; } busy = true; setButtons(true); loadBtn(btnId, true); byId("tx").textContent = label + "…"; const t0 = performance.now(); let pend = null; try { const hash = await writeWithRetry(writeClient, fn, args, value); pend = tlRow("pending", label, hash); byId("tx").textContent = label + " pending"; await waitAccepted(hash, label); const ms = Math.round(performance.now() - t0); if (pend) pend.remove(); tlRow("confirmed", label, hash, ms); byId("tx").textContent = "idle"; toast(label + " confirmed · " + short(hash) + " · " + ms + "ms", "bapprove"); await rereadAfter(fn, args); await refreshAll(); refreshBalance(); return hash; } catch (e) { if (pend) pend.remove(); tlRow("failed", label, null); setErr(label + " failed: " + (e && e.message ? e.message : e)); } finally { busy = false; setButtons(offNetwork); loadBtn(btnId, false); } }
+async function send(fn, args, value, label, btnId) { if (busy) return; if (!writeClient) { setErr("Connect your wallet first."); return; } if (!(await guardNetwork())) { setErr(label + " blocked — wrong network. NOT sent."); return; } busy = true; setButtons(true); loadBtn(btnId, true); byId("tx").textContent = label + "…"; const t0 = performance.now(); let pend = null; try { const hash = await writeWithRetry(writeClient, fn, args, value); pend = tlRow("pending", label, hash); byId("tx").textContent = label + " pending"; await writeClient.waitForTransactionReceipt({ hash, status: TransactionStatus.ACCEPTED }); const ms = Math.round(performance.now() - t0); if (pend) pend.remove(); tlRow("confirmed", label, hash, ms); byId("tx").textContent = "idle"; toast(label + " confirmed · " + short(hash) + " · " + ms + "ms", "bapprove"); await rereadAfter(fn, args); await refreshAll(); refreshBalance(); return hash; } catch (e) { if (pend) pend.remove(); tlRow("failed", label, null); setErr(label + " failed: " + (e && e.message ? e.message : e)); } finally { busy = false; setButtons(offNetwork); loadBtn(btnId, false); } }
 function activeId() { return (byId("item").value.trim() || byId("itemSel").value || "").trim(); }
 function needItem() { if (!activeId()) { setErr("Choose or create an item first."); showTab("console"); showZone("flow"); return false; } byId("item").value = activeId(); return true; }
 function isUrl(u) { return /^https?:\/\/.+/i.test(u); }
@@ -321,20 +321,6 @@ byId("btnFund").addEventListener("click", doFund);
 byId("btnReverify").addEventListener("click", doReverify);
 
 /* --- Milestone v1 (BLOCK4): RPC retry + status reread + guided Judge/Steward cycles --- */
-async function waitAccepted(hash, label){
-  var attempts = 0, lastErr = null;
-  while (attempts < 4){
-    attempts++;
-    try { return await writeClient.waitForTransactionReceipt({ hash, status: TransactionStatus.ACCEPTED }); }
-    catch (e){
-      lastErr = e;
-      var m = String((e && e.message) || e || "").toLowerCase();
-      if ((m.indexOf("timed out") !== -1 || m.indexOf("timeout") !== -1) && attempts < 4){ byId("tx").textContent = label + " finalizing " + attempts + "/4"; toast(label + " slow to finalize - still waiting " + attempts + "/4", "bflag"); continue; }
-      throw e;
-    }
-  }
-  throw lastErr;
-}
 async function writeWithRetry(client, fn, args, value){
   var attempts = 0, lastErr = null;
   while (attempts < 3){

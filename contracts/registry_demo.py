@@ -11,8 +11,8 @@ ESCALATE_HI = 60
 AXES = ("scam", "spam", "harassment", "hate", "violence", "sexual", "self_harm")
 MAX_OPEN_REPORTS = 3
 MAX_OPEN_APPEALS = 2
-ENFORCE_TIMEOUT_SEC = 86400
-APPEAL_TIMEOUT_SEC = 172800
+ENFORCE_TIMEOUT_SEC = 60
+APPEAL_TIMEOUT_SEC = 60
 LLM_COOLDOWN_SEC = 60
 @gl.evm.contract_interface
 class _Recipient:

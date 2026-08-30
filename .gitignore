@@ -6,3 +6,5 @@ cm-*.txt
 
 contract.txt
 *-tx.txt
+.env
+*.v12bak
