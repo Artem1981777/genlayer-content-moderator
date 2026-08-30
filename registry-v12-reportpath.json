@@ -1,0 +1,39 @@
+{
+  "address": "0x62A9196dBB55585840D13631aB7C68288761a74A",
+  "explorer": "https://explorer-bradbury.genlayer.com",
+  "generated": "2026-08-30T10:30:38.727Z",
+  "reporter_addr": "0xDDc066e313d2bAb6800A341dff48CFD894e1B944",
+  "report_open": {
+    "test": "#2 report path open on ingested item (fresh reporter, != author)",
+    "pass": true,
+    "tx": "0xc6083bf770a88b706fe45275ade4212f065de72d817aff94c86e988d21977446",
+    "item": "8dae08fcb9b99bff",
+    "url": "https://artem1981777.github.io/genlayer-content-moderator/fixtures/benign.html?r=1788086600419_1",
+    "author": "0xB596E24480e6a9a54d5303d84791917Bcf8b64D0",
+    "reporter": "0xDDc066e313d2bAb6800A341dff48CFD894e1B944",
+    "status_after": "ingested",
+    "explorer": "https://explorer-bradbury.genlayer.com/tx/0xc6083bf770a88b706fe45275ade4212f065de72d817aff94c86e988d21977446"
+  },
+  "dedup_T1": {
+    "test": "#7 duplicate-URL second ingest reverts",
+    "url": "https://artem1981777.github.io/genlayer-content-moderator/fixtures/benign.html?d=1788085838723",
+    "item1": "5854371677dc3997",
+    "item2": "8afe876282d57b68",
+    "pass": true,
+    "how": "onchain-FINISHED_WITH_ERROR",
+    "tx": "0xc0a74b6a07006a6323839538fde4a12ac85437adb2f594292c351cb9c4c6a0cd",
+    "explorer": "https://explorer-bradbury.genlayer.com/tx/0xc0a74b6a07006a6323839538fde4a12ac85437adb2f594292c351cb9c4c6a0cd"
+  },
+  "reportpath_run": "2026-08-30T10:43:12.431Z",
+  "report_settlement": {
+    "test": "reporter bond settles at enforce (P2 positive path)",
+    "pass": true,
+    "moderate_tx": "0xe4f62b8ae0f60b18cef1b2de7314dad72facb73fb68ec74a9189f93de5fc46aa",
+    "enforce_tx": "0xdb846b83f65102333732b41d1dc4a1d86943d1160c0d3ccad2d2072f4a6daf07",
+    "verdict": "APPROVE",
+    "stake_outcome": "author_refund+reporter_forfeit",
+    "final_status": "enforced",
+    "explorer_moderate": "https://explorer-bradbury.genlayer.com/tx/0xe4f62b8ae0f60b18cef1b2de7314dad72facb73fb68ec74a9189f93de5fc46aa",
+    "explorer_enforce": "https://explorer-bradbury.genlayer.com/tx/0xdb846b83f65102333732b41d1dc4a1d86943d1160c0d3ccad2d2072f4a6daf07"
+  }
+}
