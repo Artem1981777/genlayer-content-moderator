@@ -60,12 +60,15 @@ v1.2.0 is a minimal, surgical hardening of the v1.1 state machine — no archite
 | --- | --- | --- |
 | Re-roll gate on `moderate()` | a moderated verdict cannot be re-rolled by a non-owner without an active report | reverted re-roll [`0x4d9a2449`](https://explorer-bradbury.genlayer.com/tx/0x4d9a2449fbef3f73c18282c12a99313e5c8b404ec5c62708e76eb52e4092669b) |
 | `report()` excludes `enforced` | a reporter bond can no longer be stranded on an already-enforced item | reverted report-on-enforced [`0x23163f4d`](https://explorer-bradbury.genlayer.com/tx/0x23163f4d42de22c04ad6fba197133ace0204107fc3b185f036153ed5fc91b4eb) |
+| `report()` opens on `ingested` (positive) | an honest reporter can bond against live content | report opened [`0xc6083bf7`](https://explorer-bradbury.genlayer.com/tx/0xc6083bf770a88b706fe45275ade4212f065de72d817aff94c86e988d21977446) |
+| reporter bond settles at `enforce()` | a false report is slashed and paid to the author (`author_refund+reporter_forfeit`) | moderate [`0xe4f62b8a`](https://explorer-bradbury.genlayer.com/tx/0xe4f62b8ae0f60b18cef1b2de7314dad72facb73fb68ec74a9189f93de5fc46aa) → enforce [`0xdb846b83`](https://explorer-bradbury.genlayer.com/tx/0xdb846b83f65102333732b41d1dc4a1d86943d1160c0d3ccad2d2072f4a6daf07) |
+| duplicate-URL ingest guard (T1) | the same source cannot be double-staked while under active moderation | reverted dup ingest [`0xc0a74b6a`](https://explorer-bradbury.genlayer.com/tx/0xc0a74b6a07006a6323839538fde4a12ac85437adb2f594292c351cb9c4c6a0cd) |
 | permissionless `enforce()` after `ENFORCE_TIMEOUT_SEC` | staked value cannot be frozen by an inactive owner | permissionless enforce [`0xf12ed266`](https://explorer-bradbury.genlayer.com/tx/0xf12ed266f0777bb0a0d4e09b783e55d0bfda7c61403af2f37d3281d18c94cab0) |
 | `reclaim_appeal()` after `APPEAL_TIMEOUT_SEC` | an appellant always recovers the bond if the owner never resolves | reclaim by timeout [`0x34df52e8`](https://explorer-bradbury.genlayer.com/tx/0x34df52e8d08e4018d8188db8414db1287ba0d8cea664c2f95456794d8a51a88d) |
 | per-call canary token (`_canary_token`) | a leaked static canary can no longer be echoed to bypass injection detection | SECURITY.md #6 |
 | masked public content (`_public_item`) | blocked/limited content is not re-served via `get_item`/`get_all_items` | SECURITY.md #4 |
 
-Both timeout proofs were produced on a dedicated demo instance `0xf481F23BAb92117d0C424a7cCB047c78B17471B2` with shortened constants (`ENFORCE_TIMEOUT_SEC=APPEAL_TIMEOUT_SEC=60`), so the permissionless paths are verifiable without waiting the production 24h/48h windows; production v1.2 keeps 86400/172800 s. Raw evidence: `registry-demo-evidence.json`, `registry-v12-proofs.json`.
+Both timeout proofs were produced on a dedicated demo instance `0xf481F23BAb92117d0C424a7cCB047c78B17471B2` with shortened constants (`ENFORCE_TIMEOUT_SEC=APPEAL_TIMEOUT_SEC=60`), so the permissionless paths are verifiable without waiting the production 24h/48h windows; production v1.2 keeps 86400/172800 s. Raw evidence: `registry-demo-evidence.json`, `registry-v12-proofs.json`, `registry-v12-reportpath.json`.
 
 ### On-chain traction (registry v1.1)
 
@@ -82,7 +85,7 @@ Full lifecycle (item `3884daf20bdf64dc`): create `0x3a52f64e...` / ingest `0x865
 
 Payout ledger (on-chain): `author_refund` 1e12 x2, `false_report_comp` 1e12 to author, `reporter_reward` 1.5e12 to operator.
 
-> Note: the FLAG verdict is fully supported by the contract (top harm-axis score 50-79 maps to FLAG). It is intentionally not force-seeded because borderline content is by design consensus-sensitive, and we do not fabricate on-chain results.
+> Note: the full report → moderate → enforce path is proven live on production v1.2 — report [`0xc6083bf7`](https://explorer-bradbury.genlayer.com/tx/0xc6083bf770a88b706fe45275ade4212f065de72d817aff94c86e988d21977446) then settlement `author_refund+reporter_forfeit` at enforce [`0xdb846b83`](https://explorer-bradbury.genlayer.com/tx/0xdb846b83f65102333732b41d1dc4a1d86943d1160c0d3ccad2d2072f4a6daf07), plus the duplicate-URL guard [`0xc0a74b6a`](https://explorer-bradbury.genlayer.com/tx/0xc0a74b6a07006a6323839538fde4a12ac85437adb2f594292c351cb9c4c6a0cd). The FLAG verdict is fully supported by the contract (top harm-axis 50-79 maps to FLAG); the FLAG-specific `author_partial_forfeit` settlement is intentionally not force-seeded because borderline content is by design consensus-sensitive, and we do not fabricate on-chain results.
 
 ## v0.5.0 — authenticated ingestion (what changed)
 

@@ -9,6 +9,8 @@ Redeployed to Bradbury `0x62A9196dBB55585840D13631aB7C68288761a74A` — deploy t
 ### Fixed
 - **Re-roll gate** — `moderate()` on a `moderated` item now requires owner OR an active report (plus an LLM cooldown); a non-owner re-roll reverts. Proof: [`0x4d9a2449`](https://explorer-bradbury.genlayer.com/tx/0x4d9a2449fbef3f73c18282c12a99313e5c8b404ec5c62708e76eb52e4092669b).
 - **Reporter bond no longer strands** — `report()` dropped `enforced` from the reportable set, so no bond can be locked against an enforced item. Proof (revert): [`0x23163f4d`](https://explorer-bradbury.genlayer.com/tx/0x23163f4d42de22c04ad6fba197133ace0204107fc3b185f036153ed5fc91b4eb).
+- **Report path proven live (positive)** — an honest reporter bonds on an `ingested` item and the bond settles deterministically at `enforce()`: report [`0xc6083bf7`](https://explorer-bradbury.genlayer.com/tx/0xc6083bf770a88b706fe45275ade4212f065de72d817aff94c86e988d21977446) → moderate [`0xe4f62b8a`](https://explorer-bradbury.genlayer.com/tx/0xe4f62b8ae0f60b18cef1b2de7314dad72facb73fb68ec74a9189f93de5fc46aa) → enforce [`0xdb846b83`](https://explorer-bradbury.genlayer.com/tx/0xdb846b83f65102333732b41d1dc4a1d86943d1160c0d3ccad2d2072f4a6daf07), settling `author_refund+reporter_forfeit` (false report slashed, paid to author).
+- **Duplicate-URL ingest guard (T1)** — a second ingest of a URL already under active moderation reverts before any stake or fetch. Live (revert): [`0xc0a74b6a`](https://explorer-bradbury.genlayer.com/tx/0xc0a74b6a07006a6323839538fde4a12ac85437adb2f594292c351cb9c4c6a0cd).
 
 ### Added
 - **Liveness by timeout** — permissionless `enforce()` after `ENFORCE_TIMEOUT_SEC` (86400 s) and `reclaim_appeal()` after `APPEAL_TIMEOUT_SEC` (172800 s). Positive proofs on a 60 s-constant demo instance `0xf481F23BAb92117d0C424a7cCB047c78B17471B2`: enforce [`0xf12ed266`](https://explorer-bradbury.genlayer.com/tx/0xf12ed266f0777bb0a0d4e09b783e55d0bfda7c61403af2f37d3281d18c94cab0), reclaim [`0x34df52e8`](https://explorer-bradbury.genlayer.com/tx/0x34df52e8d08e4018d8188db8414db1287ba0d8cea664c2f95456794d8a51a88d).
@@ -17,7 +19,7 @@ Redeployed to Bradbury `0x62A9196dBB55585840D13631aB7C68288761a74A` — deploy t
 - **Reachable second appeal** — removed the per-item `appeal_count<2` cap; appeals stay reachable (denied → `enforced`), each costs a fresh bond, an overturned item is terminal.
 
 ### Evidence
-- `registry-v12-proofs.json` (guard reverts), `registry-demo-evidence.json` (timeout positives), `registry-v12-tests.json` (fix suite).
+- `registry-v12-proofs.json` (guard reverts), `registry-demo-evidence.json` (timeout positives), `registry-v12-tests.json` (fix suite), `registry-v12-reportpath.json` (report-path positives + T1 dedup).
 
 ## [v1.1] — 2026-08-29 — Multi-item Registry, Staking & Anti-abuse
 
