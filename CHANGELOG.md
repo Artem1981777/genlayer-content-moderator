@@ -2,7 +2,7 @@
 
 All notable changes to **ContentModerator**. Commit links point to the repository history.
 
-## [v1.2] — 2026-08-30 — Economic hardening (minimal surgical state-machine patches) — tag `v1.2.0`
+## [v1.2.0] — 2026-08-30 — Economic hardening (minimal surgical state-machine patches) — tag `v1.2.0`
 
 Redeployed to Bradbury `0x62A9196dBB55585840D13631aB7C68288761a74A` — deploy tx [`0x3f93bb95`](https://explorer-bradbury.genlayer.com/tx/0x3f93bb9574627afdc0bd41caa79e0b8e329004b7098915ad0c9de61db0425c47). No architecture, consensus, or ingest changes; `registry.html` only had its contract-address pointer repointed.
 
@@ -17,6 +17,11 @@ Redeployed to Bradbury `0x62A9196dBB55585840D13631aB7C68288761a74A` — deploy t
 - **Per-call canary token** (`_canary_token`) replacing the static `GLM-OK`, closing the public-canary-echo bypass.
 - **Public content masking** (`_public_item`) — REMOVE returns `[content removed by moderation]`, FLAG is prefixed `[limited]`.
 - **Reachable second appeal** — removed the per-item `appeal_count<2` cap; appeals stay reachable (denied → `enforced`), each costs a fresh bond, an overturned item is terminal.
+
+### Commits
+- State-machine hardening patches (re-roll gate, `report()` reportable-set, timeout liveness, per-call canary, public-content masking, reachable 2nd appeal) + `ARCHITECTURE.md` / `SECURITY.md` — [`ff67971`](https://github.com/Artem1981777/genlayer-content-moderator/commit/ff67971)
+- Live report-path (open + settlement, false-report slash) and T1 dedup evidence — [`78e432d`](https://github.com/Artem1981777/genlayer-content-moderator/commit/78e432d)
+- Hardening-table + CHANGELOG rows for report-path #2 and T1 dedup — [`1c08a95`](https://github.com/Artem1981777/genlayer-content-moderator/commit/1c08a95)
 
 ### Evidence
 - `registry-v12-proofs.json` (guard reverts), `registry-demo-evidence.json` (timeout positives), `registry-v12-tests.json` (fix suite), `registry-v12-reportpath.json` (report-path positives + T1 dedup).

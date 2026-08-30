@@ -164,14 +164,27 @@ The contract fetches live web content, so prompt-injection is the primary attack
 - One-click **guided cycles** — Judge (create -> ingest -> moderate -> enforce) and Steward (resolve an appealed item) — plus **RPC retry** on transient errors (retries only before broadcast, so no double-send) and a **post-transaction status reread** that surfaces the new item status/verdict. The dApp only reads state and submits transactions; every verdict is computed in the contract.
 
 ### Intelligent Contract (v1.2 active, lineage from v1.1)
-- **[contracts/registry.py](contracts/registry.py)** — the v1.1 registry (commit [`f73005c`](https://github.com/Artem1981777/genlayer-content-moderator/commit/f73005c)): multi-item registry, staking economy, hardened multi-axis prompt, and anti-abuse guards.
+- **[contracts/registry.py](contracts/registry.py)** — the active v1.2 registry, hardened from the v1.1 base (base commit [`f73005c`](https://github.com/Artem1981777/genlayer-content-moderator/commit/f73005c)): multi-item registry, staking economy, hardened multi-axis prompt, and anti-abuse guards.
 
 ## Repository layout
 
-- contracts/moderator.py — the Intelligent Contract (v0.5.0)
-- test.mjs — full two-role end-to-end test (operator + author)
-- resume.mjs — idempotent runner that attaches to a deployed contract and drives the remaining steps (congestion-tolerant)
-- fixtures/ — public sample posts used as authenticated sources
+- `contracts/registry.py` — active Intelligent Contract (v1.2, deployed `0x62A9196dBB55585840D13631aB7C68288761a74A`): multi-item registry, staking economy, hardened multi-axis prompt, anti-abuse guards, and the v1.2 economic-hardening patches
+- `contracts/registry_demo.py` — demo contract with 60 s timeout constants; proves the permissionless-enforce / reclaim liveness paths without the production 24h/48h waits
+- `contracts/moderator.py` — original single-item Intelligent Contract (v0.5.0), retained for history
+- `prod-proofs.mjs` — captures the production guard reverts (re-roll gate, report-on-enforced)
+- `report2.mjs` — proves the live report path (fresh reporter + read-back state verification) and its settlement
+- `demo-reclaim2.mjs` — proves permissionless enforce + reclaim on the 60 s demo instance
+- `test-v12.mjs` — v1.2 fix suite (includes the duplicate-URL / T1 dedup probe)
+- `registry-v12-proofs.json` — raw evidence: production guard reverts
+- `registry-v12-reportpath.json` — raw evidence: live report-path (open + settlement) + T1 dedup
+- `registry-demo-evidence.json` — raw evidence: timeout-liveness positives (demo instance)
+- `registry-v12-tests.json` — raw evidence: fix suite
+- `registry.html` — interactive mission-control dApp (reads state / submits tx only)
+- `fixtures/` — public sample posts used as authenticated ingest sources
+- `test.mjs` — original v0.5.0 two-role end-to-end test
+- `resume.mjs` — idempotent, congestion-tolerant runner
+- `ARCHITECTURE.md` — architecture deep dive (lifecycle state machine, data model, consensus sequence)
+- `SECURITY.md` — threat model deep dive (attack -> cost -> defense matrix)
 
 ## Run
 
