@@ -1,11 +1,14 @@
 node_modules/
 .env
+.env.*
+*.key
+author.key
 __pycache__/
-node_modules
+*.pyc
+.pytest_cache/
 cm-*.txt
 
 contract.txt
 *-tx.txt
-.env
 *.v12bak
 *.bak

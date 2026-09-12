@@ -1,13 +1,16 @@
 {
   "name": "genlayer-content-moderator",
-  "version": "0.3.0",
-  "description": "AI content moderation Intelligent Contract on GenLayer with on-chain appeals: an LLM judges content against community rules, validators reach consensus on APPROVE/FLAG/REMOVE, and verdicts can be contested.",
+  "version": "2.0.0",
+  "description": "AI content moderation on GenLayer: Intelligent Contract (registry v2) with validator-consensus verdicts, staking, permissionless appeals, reputation, SDK and dApp.",
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "deploy": "node --env-file=.env deploy.mjs",
-    "interact": "node --env-file=.env interact.mjs",
-    "test": "node --env-file=.env test.mjs"
+    "lint": "genvm-lint check contracts/registry_v2.py",
+    "test": "pytest tests/direct",
+    "test:report": "pytest tests/direct --junitxml=pytest-report.xml",
+    "deploy": "node --env-file=.env scripts/deploy.mjs",
+    "interact": "node --env-file=.env scripts/interact.mjs",
+    "e2e": "node --env-file=.env scripts/test.mjs"
   },
   "dependencies": {
     "genlayer-js": "^1.1.8",
