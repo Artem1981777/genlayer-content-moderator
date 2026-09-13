@@ -6,7 +6,8 @@
 // V6 AddTransaction locally and broadcasts eth_sendRawTransaction — the same
 // encoding the official genlayer CLI 0.39.x uses (primary V6, V5 fallback).
 import { parseTransaction, parseEventLogs, toHex } from "viem";
-import { encodeAddTransactionV6, encodeAddTransactionV5, CONSENSUS_MAIN } from "./txbuild.mjs";
+import { encodeAddTransactionV6, encodeAddTransactionV5 } from "./txbuild.mjs";
+import { CONSENSUS_MAIN } from "./config.mjs";
 import { sleep } from "./client.mjs";
 
 const CREATED_TX_EVENT = [{

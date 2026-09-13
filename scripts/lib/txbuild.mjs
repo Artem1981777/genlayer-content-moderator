@@ -6,8 +6,7 @@
 // Mirrors the official genlayer CLI (0.39.x) _encodeAddTransactionData.
 import { encodeFunctionData, toRlp, toHex } from "viem";
 import { encode, makeCalldataObject } from "./calldata.mjs";
-
-export const CONSENSUS_MAIN = "0x0112Bf6e83497965A5fdD6Dad1E447a6E004271D";
+import { CONSENSUS_MAIN } from "./config.mjs";
 
 const ADD_TRANSACTION_V6 = [
   { name: "_sender", type: "address" },

@@ -10,9 +10,7 @@ import { encodeWriteTxData, encodeDeployTxData } from "./txbuild.mjs";
 import { broadcastAddTransaction, waitFinality } from "./sender.mjs";
 import { TransactionStatus } from "genlayer-js/types";
 
-export const RPC = "https://rpc-bradbury.genlayer.com";
-export const EXPLORER = "https://explorer-bradbury.genlayer.com";
-export const PAGES = "https://artem1981777.github.io/genlayer-content-moderator";
+export { RPC, EXPLORER, PAGES, CHAIN_ID, CONSENSUS_MAIN, txLink } from "./config.mjs";
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -107,6 +105,3 @@ export async function sendValue(client, to, value) {
   return hash;
 }
 
-export function txLink(hash) {
-  return EXPLORER + "/tx/" + String(hash);
-}
