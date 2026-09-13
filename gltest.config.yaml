@@ -1,0 +1,12 @@
+# genlayer-test (gltest) configuration — see docs.genlayer.com/api-references/genlayer-test
+# Integration tests run against live Testnet Bradbury with a funded key from
+# the environment (never committed): .env / CI env var ACCOUNT_PRIVATE_KEY_1.
+networks:
+  default: testnet_bradbury
+  testnet_bradbury:
+    accounts:
+      - ${ACCOUNT_PRIVATE_KEY_1}
+paths:
+  contracts: contracts
+  artifacts: artifacts
+environment: .env
