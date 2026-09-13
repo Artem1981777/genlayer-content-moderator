@@ -70,7 +70,7 @@ const V6 = [
 ];
 const ADD_TX_ABI = [{ type: "function", name: "addTransaction", stateMutability: "nonpayable", inputs: V6, outputs: [] }];
 
-const SIZES_KB = [2, 8, 16, 32, 48, 52];
+const SIZES_KB = [24, 32, 40, 44];
 const probes = [];
 const nonce0 = await rpc("eth_getTransactionCount", [acct.address, "latest"]);
 console.log("nonce before probes:", nonce0);
