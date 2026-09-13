@@ -15,6 +15,7 @@ import type {
   Reputation,
   RuleSetView,
 } from "./types";
+import { broadcastWrite, encodeWriteTxData, type MinimalClient } from "./flat-tx";
 
 export interface GenLayerClientLike {
   readContract(args: {
@@ -156,7 +157,13 @@ export class RegistryClient {
   }
 
   // --------------------------------------------------------------- writes
-  /** Submit a write and wait for execution finality (FINISHED / FINISHED_WITH_RETURN). */
+  /**
+   * Submit a write and wait for execution finality (FINISHED / FINISHED_WITH_RETURN).
+   * Broadcasts through the flat AddTransaction path: the upgraded Bradbury
+   * consensus only accepts addTransaction(_sender,_recipient,_validators,
+   * _maxRotations,_txData,_validUntil); the struct variant encoded by
+   * genlayer-js ≤ 2.0.0-rc.1 reverts on-chain (see docs/evidence/v2).
+   */
   async write(
     fn: string,
     args: unknown[] = [],
@@ -165,25 +172,19 @@ export class RegistryClient {
     let lastErr: unknown;
     for (let attempt = 1; attempt <= this.retries; attempt++) {
       try {
-        const hash = await this.client.writeContract({
-          address: this.address,
-          functionName: fn,
-          args,
-          value,
-        });
-        await this.client.waitForTransactionReceipt({
-          hash,
-          status: this.acceptedStatus,
-          retries: 400,
-        });
-        await this.waitForFinalized(hash);
-        return hash;
+        const genTxId = await broadcastWrite(
+          this.client as unknown as MinimalClient,
+          this.address as `0x${string}`,
+          encodeWriteTxData(fn, args),
+          { value },
+        );
+        await this.waitForFinalized(genTxId);
+        return genTxId;
       } catch (e) {
         lastErr = e;
         const msg = e instanceof Error ? e.message : String(e);
-        // retry only transient errors; note writeContract may fail before or
-        // after broadcast — consensus/state guards make retried writes safe
-        // because a duplicate would revert without side effects
+        // retry only transient errors; a duplicate write reverts without side
+        // effects, so retries are safe against consensus/state guards
         if (isRetriable(msg) && attempt < this.retries) {
           await sleep(10_000);
           continue;

@@ -1,10 +1,12 @@
 name: Deploy contract (manual)
 
-# Deploys registry_v2 prod + demo to Bradbury and commits deployments.json.
+# Deploys registry_v2 prod + demo to Bradbury and commits deployments.json +
+# deploy-state.json. Resumable: state persists between runs, so a rerun never
+# double-deploys (state files are committed AND uploaded as artifacts).
 # Requires repository secret PRIVATE_KEY (funded Bradbury key).
-# Trigger: Actions -> Deploy contract (manual) -> Run workflow.
-# This exists because the maintainer's local network resets large outbound
-# payloads; CI runners have healthy MTU.
+# NOTE: the full registry_v2 AddTransaction is ~50KB and currently exceeds the
+# Bradbury pubdata ceiling (~17KB, see docs/evidence/v2/deploy-path-matrix.md);
+# the run fails honestly and resumes when the network lifts the limit.
 on:
   workflow_dispatch:
 
@@ -14,21 +16,47 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
       - name: Install deps
         run: npm install --no-audit --no-fund
+      - name: Preflight checks
+        env:
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+        run: |
+          if [ -z "$PRIVATE_KEY" ]; then
+            echo "::error::PRIVATE_KEY secret is not set (repo Settings → Secrets → Actions)"
+            exit 1
+          fi
+          node scripts/diagnostics/env-report.mjs
+          node scripts/diagnostics/preflight.mjs
+      - name: Restore deploy state
+        uses: actions/download-artifact@v4
+        with:
+          name: deploy-state
+          path: .
+        continue-on-error: true
       - name: Deploy prod + demo
         env:
           PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
         run: node scripts/deploy.mjs
-      - name: Commit deployments.json
+      - name: Upload deploy state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-state
+          path: |
+            deploy-state.json
+            deployments.json
+          if-no-files-found: ignore
+      - name: Commit artifacts
+        if: always()
         run: |
           git config user.name "deploy-bot"
           git config user.email "deploy-bot@users.noreply.github.com"
-          git add deployments.json
-          git commit -m "chore: registry_v2 deployments (prod + demo) [skip ci]" || echo "no changes"
-          git push
+          git add deployments.json deploy-state.json 2>/dev/null || true
+          git diff --cached --quiet || (git commit -m "chore: registry_v2 deployment artifacts [skip ci]" && git push)

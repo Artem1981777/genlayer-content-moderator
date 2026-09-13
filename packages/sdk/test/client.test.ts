@@ -43,6 +43,30 @@ function makeItem(overrides: Partial<ModerationItem> = {}): ModerationItem {
   return { ...base, ...overrides } as ModerationItem;
 }
 
+const NEW_TX_TOPIC = "0xdab9102861c7483a187584d6371d88316f005af507982ccf95c110879f3ed5a5";
+const EVM_HASH = ("0x" + "ee".repeat(32));
+const GEN_TXID = ("0x" + "ff".repeat(32));
+
+function flatRequestMock() {
+  return vi.fn(async ({ method }: { method: string }) => {
+    if (method === "eth_gasPrice") return "0x1";
+    if (method === "eth_getTransactionCount") return "0x1";
+    if (method === "eth_estimateGas") return "0x100000";
+    if (method === "eth_sendRawTransaction") return EVM_HASH;
+    if (method === "eth_getTransactionReceipt") {
+      return {
+        status: "0x1",
+        logs: [{
+          address: "0x0112bf6e83497965a5fdd6dad1e447a6e004271d",
+          topics: [NEW_TX_TOPIC, GEN_TXID, "0x" + "11".repeat(32), "0x" + "22".repeat(32)],
+          data: "0x",
+        }],
+      };
+    }
+    throw new Error("unexpected rpc " + method);
+  });
+}
+
 function mockClient(overrides: Record<string, unknown> = {}) {
   return {
     readContract: vi.fn(async ({ functionName, args }) => {
@@ -78,6 +102,8 @@ function mockClient(overrides: Record<string, unknown> = {}) {
     writeContract: vi.fn(async () => "0x" + "ff".repeat(32)),
     waitForTransactionReceipt: vi.fn(async () => ({})),
     getTransaction: vi.fn(async () => ({ txExecutionResultName: "FINISHED" })),
+    account: { address: "0x" + "33".repeat(20), signTransaction: vi.fn(async () => ("0x" + "dd".repeat(40))) },
+    request: flatRequestMock(),
     ...overrides,
   };
 }
@@ -120,26 +146,22 @@ describe("RegistryClient", () => {
     );
   });
 
-  it("write waits for finality and returns the hash", async () => {
+  it("write waits for finality and returns the GenLayer tx id", async () => {
     const mc = mockClient();
     const c = new RegistryClient({ address: ADDR, client: mc as never });
     const h = await c.moderate("abc123");
-    expect(h).toBe("0x" + "ff".repeat(32));
-    expect(mc.writeContract).toHaveBeenCalledWith(
-      expect.objectContaining({ functionName: "moderate", args: ["abc123"] }),
-    );
-    expect(mc.waitForTransactionReceipt).toHaveBeenCalled();
+    expect(h).toBe(GEN_TXID);
     expect(mc.getTransaction).toHaveBeenCalled();
-  });
+  }, 30_000);
 
-  it("write attaches value for payable calls", async () => {
+  it("write attaches value as the AddTransaction EVM msg.value", async () => {
     const mc = mockClient();
     const c = new RegistryClient({ address: ADDR, client: mc as never });
     await c.ingest("id", "https://x", 1_000_000_000_000n);
-    expect(mc.writeContract).toHaveBeenCalledWith(
-      expect.objectContaining({ functionName: "ingest", value: 1_000_000_000_000n }),
+    expect(mc.account.signTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ value: 1_000_000_000_000n }),
     );
-  });
+  }, 30_000);
 
   it("retries transient -32005 errors before finality", async () => {
     const mc = mockClient();
@@ -164,12 +186,16 @@ describe("RegistryClient", () => {
 
   it("does not retry non-transient errors", async () => {
     const mc = mockClient();
-    mc.writeContract = vi.fn(async () => {
-      throw new Error("Author stake below minimum");
+    mc.request = vi.fn(async ({ method }: { method: string }) => {
+      if (method === "eth_sendRawTransaction") throw new Error("insufficient funds");
+      if (method === "eth_gasPrice") return "0x1";
+      if (method === "eth_getTransactionCount") return "0x1";
+      if (method === "eth_estimateGas") return "0x100000";
+      throw new Error("unexpected rpc " + method);
     });
     const c = new RegistryClient({ address: ADDR, client: mc as never, retries: 5 });
-    await expect(c.ingest("id", "https://x", 1n)).rejects.toThrow(/below minimum/);
-    expect(mc.writeContract).toHaveBeenCalledTimes(1);
+    await expect(c.ingest("id", "https://x", 1n)).rejects.toThrow(/insufficient funds/);
+    expect(mc.request).toHaveBeenCalledTimes(4);
   });
 
   it("subscribe fires on snapshot change and stops on unsubscribe", async () => {

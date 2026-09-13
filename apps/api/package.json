@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@genlayer-cm/sdk": "file:../../packages/sdk",
-    "genlayer-js": "^1.1.8",
+    "genlayer-js": "2.0.0-rc.1",
     "next": "^15.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
