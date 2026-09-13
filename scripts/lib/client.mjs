@@ -8,6 +8,7 @@ import { createClient, createAccount } from "genlayer-js";
 import { testnetBradbury } from "genlayer-js/chains";
 import { encodeWriteTxData, encodeDeployTxData } from "./txbuild.mjs";
 import { broadcastAddTransaction, waitFinality } from "./sender.mjs";
+import { TransactionStatus } from "genlayer-js/types";
 
 export const RPC = "https://rpc-bradbury.genlayer.com";
 export const EXPLORER = "https://explorer-bradbury.genlayer.com";
@@ -22,21 +23,6 @@ export function accountFrom(key) {
 
 export function clientFor(account) {
   return createClient({ chain: testnetBradbury, account });
-}
-
-function retriable(msg) {
-  msg = String(msg || "").toLowerCase();
-  return (
-    msg.includes("-32005") ||
-    msg.includes("capacity") ||
-    msg.includes("rate limit") ||
-    msg.includes("exceeds defined limit") ||
-    msg.includes("consensus contract") ||
-    msg.includes("evm tx") ||
-    msg.includes("fetch failed") ||
-    msg.includes("timeout") ||
-    msg.includes("not_voted")
-  );
 }
 
 export async function waitFinal(client, hash, label, maxIters = 90) {

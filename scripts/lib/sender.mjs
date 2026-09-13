@@ -58,11 +58,10 @@ function extractTxId(logs) {
 }
 
 // Broadcasts a flat AddTransaction and resolves the GenLayer tx id.
-// Never retries after a broadcast: caller decides (nonce check) whether
-// the attempt may have landed.
+// Retries nonce conflicts locally (rejected pre-broadcast — no double-send);
+// never retries after an accepted broadcast: caller decides (nonce check).
 export async function broadcastAddTransaction(client, account, { recipient, txData, validators = 5n, maxRotations = 3n, validUntilSec }) {
   const rpc = rawRpc(client);
-  const nonce = BigInt(await rpc("eth_getTransactionCount", [account.address, "latest"]));
   const gasPriceHex = await rpc("eth_gasPrice", []);
   const gasPrice = (BigInt(gasPriceHex) * 3n) / 2n + 1n;
   const validUntil = validUntilSec ?? Math.floor(Date.now() / 1000) + 7200;
@@ -78,33 +77,56 @@ export async function broadcastAddTransaction(client, account, { recipient, txDa
     } catch (e) {
       console.log("  gas estimation failed, using default 2M:", String(e?.details || e?.message).slice(0, 90));
     }
-    const raw = await account.signTransaction({ to: CONSENSUS_MAIN, data, value: 0n, nonce, gas, gasPrice, type: "legacy", chainId: 4221 });
-    const evmHash = await rpc("eth_sendRawTransaction", [raw]);
-    // wait for EVM mining (this proves the AddTransaction reached consensus)
-    let receipt = null;
+    // nonce conflicts happen when earlier queued txs are still mining;
+    // a conflicted tx is rejected by the node, so re-signing is safe
+    let nonce = null;
+    for (let i = 0; i < 5; i++) {
+      nonce = BigInt(await rpc("eth_getTransactionCount", [account.address, "latest"]));
+      try {
+        const raw = await account.signTransaction({ to: CONSENSUS_MAIN, data, value: 0n, nonce, gas, gasPrice, type: "legacy", chainId: 4221 });
+        const evmHash = await rpc("eth_sendRawTransaction", [raw]);
+        return { evmHash, nonce };
+      } catch (e) {
+        const msg = String(e?.details || e?.message || e);
+        if (!/nonce is not consistent|nonce too|replacement transaction|already known/i.test(msg)) throw e;
+        console.log("  nonce conflict (" + msg.slice(-70) + "), re-reading nonce");
+        await sleep(2000);
+      }
+    }
+    throw new Error("nonce conflict persisted after 5 attempts");
+  };
+
+  const mineReceipt = async (evmHash) => {
     for (let i = 0; i < 60; i++) {
       await sleep(5000);
-      receipt = await rpc("eth_getTransactionReceipt", [evmHash]).catch(() => null);
-      if (receipt) break;
+      const receipt = await rpc("eth_getTransactionReceipt", [evmHash]).catch(() => null);
+      if (receipt) return receipt;
     }
-    if (!receipt) return { evmHash, genTxId: null, pending: true };
-    if (String(receipt.status) !== "0x1") {
-      throw new Error(`AddTransaction EVM tx reverted: ${evmHash}`);
-    }
-    const genTxId = extractTxId(receipt.logs || []);
-    return { evmHash, genTxId, pending: false };
+    return null;
   };
 
   let out;
   try {
-    out = await attempt(true);
+    const { evmHash } = await attempt(true);
+    const receipt = await mineReceipt(evmHash);
+    if (!receipt) return { evmHash, genTxId: null, pending: true };
+    if (String(receipt.status) !== "0x1") {
+      throw new Error(`AddTransaction EVM tx reverted: ${evmHash}`);
+    }
+    out = { evmHash, genTxId: extractTxId(receipt.logs || []), pending: false };
   } catch (e) {
     const msg = String(e?.details || e?.message || e);
     // V5 fallback only makes sense before anything was broadcast; an EVM revert
     // already proves V6 was processed, so only non-revert transport errors retry.
     if (/reverted/i.test(msg)) throw e;
     console.log("  V6 attempt failed (" + msg.slice(0, 90) + "), trying V5 fallback");
-    out = await attempt(false);
+    const { evmHash } = await attempt(false);
+    const receipt = await mineReceipt(evmHash);
+    if (!receipt) return { evmHash, genTxId: null, pending: true };
+    if (String(receipt.status) !== "0x1") {
+      throw new Error(`AddTransaction EVM tx reverted (V5): ${evmHash}`);
+    }
+    out = { evmHash, genTxId: extractTxId(receipt.logs || []), pending: false };
   }
   return out;
 }
