@@ -1,14 +1,19 @@
 // Deploy ContentModerator Registry v2 to GenLayer Testnet Bradbury.
-// Resumable: deploy-state.json remembers broadcast tx hashes; a rerun polls
-// them to finality instead of broadcasting again (no double deploys).
+// Uses the flat AddTransaction path (scripts/lib/sender.mjs): the Bradbury
+// consensus contract only accepts addTransaction(_sender,_recipient,
+// _validators,_maxRotations,_txData,_validUntil); the struct variant encoded
+// by genlayer-js ≤2.0.0-rc.1 reverts on-chain (verified via eth_call).
+// Resumable: deploy-state.json remembers broadcast tx ids; a rerun polls them
+// to finality instead of broadcasting again (no double deploys).
 // Two instances:
 //   prod — production timeouts (86400 / 3600 / 172800 s)
 //   demo — 60 s timeouts so permissionless-enforce / appeal-resolve /
 //          reclaim liveness paths are provable without day-scale waits
 // Writes deployments.json (v2) with real tx hashes; never fabricates results.
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { TransactionStatus } from "genlayer-js/types";
-import { accountFrom, clientFor, waitFinal, sleep, EXPLORER } from "./lib/client.mjs";
+import { accountFrom, clientFor, sleep, EXPLORER } from "./lib/client.mjs";
+import { encodeDeployTxData } from "./lib/txbuild.mjs";
+import { broadcastAddTransaction, waitFinality, rawRpc } from "./lib/sender.mjs";
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 if (!PRIVATE_KEY) throw new Error("PRIVATE_KEY missing. Run: node --env-file=.env scripts/deploy.mjs");
@@ -51,93 +56,70 @@ const source = readFileSync("contracts/registry_v2.py", "utf8");
 const code = new TextEncoder().encode(source);
 const account = accountFrom(PRIVATE_KEY);
 const client = clientFor(account);
-console.log("deployer:", account.address);
+const rpc = rawRpc(client);
+console.log("deployer:", account.address, "| code bytes:", code.length);
 
-const EXPLORER_RPC = "https://rpc-bradbury.genlayer.com";
-
-async function nonce(addr) {
-  const r = await fetch(EXPLORER_RPC, {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getTransactionCount", params: [addr, "latest"] }),
-  });
-  const j = await r.json();
-  return BigInt(j.result ?? "0x0");
+function argsOf(cfg) {
+  return [
+    cfg.default_rules, cfg.min_stake, cfg.report_bond, cfg.appeal_bond,
+    cfg.enforce_timeout_sec, cfg.appeal_resolve_cooldown_sec, cfg.appeal_timeout_sec,
+    cfg.llm_cooldown_sec, cfg.max_open_reports, cfg.max_open_appeals,
+  ];
 }
 
-// Deploy is not idempotent: retry network failures only when the account
-// nonce did not move (proves the failed attempt never broadcast).
-async function deployContractSafe(payload) {
+// Broadcast is not idempotent: only retry transport-level errors when the
+// account nonce did not move (proves the attempt never reached the node).
+async function broadcastSafe(cfg) {
+  const txData = encodeDeployTxData(code, argsOf(cfg));
   for (let attempt = 1; attempt <= 5; attempt++) {
-    const n0 = await nonce(account.address);
+    const n0 = await rpc("eth_getTransactionCount", [account.address, "latest"]);
     try {
-      return await client.deployContract(payload);
+      const { genTxId, evmHash } = await broadcastAddTransaction(client, account, {
+        recipient: "0x0000000000000000000000000000000000000000", txData,
+      });
+      return { genTxId, evmHash };
     } catch (e) {
       const msg = e?.message || String(e);
-      const n1 = await nonce(account.address);
-      console.log(`  deploy attempt ${attempt} failed (${msg.slice(0, 80)}), nonce ${n0} -> ${n1}`);
-      if (n1 !== n0) throw new Error("deploy may have broadcast (nonce moved) — aborting to avoid double deploy");
+      const n1 = await rpc("eth_getTransactionCount", [account.address, "latest"]).catch(() => "?");
+      console.log(`  ${cfg.name} deploy attempt ${attempt} failed (${msg.slice(0, 90)}), nonce ${n0} -> ${n1}`);
+      if (String(n1) !== String(n0)) throw new Error("deploy may have broadcast (nonce moved) — aborting to avoid double deploy");
       if (attempt === 5) throw e;
       await sleep(15000);
     }
   }
 }
 
-async function settle(cfg, txHash) {
-  // patient finality poll: contract-deploy consensus can take minutes.
-  // A tx stuck in NOT_VOTED for ~4 minutes is treated as dropped from the
-  // consensus queue; the caller then re-broadcasts (deployOne clears state).
-  let notVoted = 0;
-  for (let i = 0; i < 120; i++) {
-    let tx = null;
-    try {
-      tx = await client.getTransaction({ hash: txHash });
-      const rn = String(tx?.txExecutionResultName || "");
-      if (rn === "FINISHED" || rn === "FINISHED_WITH_RETURN") {
-        const address = tx?.txDataDecoded?.contractAddress ?? tx?.recipient;
-        const ok = tx?.txExecutionResultName === "FINISHED" || tx?.txExecutionResultName === "FINISHED_WITH_RETURN";
-        console.log(`  ${cfg.name}: ${address} (${tx?.txExecutionResultName})`);
-        console.log("  explorer:", EXPLORER + "/tx/" + txHash);
-        if (!ok) throw new Error("deploy not clean: " + tx?.txExecutionResultName);
-        const cfgJson = JSON.parse(await client.readContract({
-          address, functionName: "get_config", args: [],
-        }));
-        console.log("  config: min_stake=" + cfgJson.min_stake, "rules_version=" + cfgJson.rules_version,
-          "owner=" + cfgJson.owner);
-        const record = {
-          address: String(address), txHash: String(txHash),
-          txLink: EXPLORER + "/tx/" + txHash,
-          params: {
-            default_rules: cfg.default_rules,
-            min_stake: String(cfg.min_stake), report_bond: String(cfg.report_bond),
-            appeal_bond: String(cfg.appeal_bond),
-            enforce_timeout_sec: String(cfg.enforce_timeout_sec),
-            appeal_resolve_cooldown_sec: String(cfg.appeal_resolve_cooldown_sec),
-            appeal_timeout_sec: String(cfg.appeal_timeout_sec),
-            llm_cooldown_sec: String(cfg.llm_cooldown_sec),
-            max_open_reports: cfg.max_open_reports, max_open_appeals: cfg.max_open_appeals,
-          },
-          owner: cfgJson.owner,
-        };
-        state[cfg.name] = record;
-        saveState();
-        return record;
-      }
-      if (/ERROR|REVERT|ROLL|DISAGREE|UNDETERMIN/i.test(rn)) {
-        throw new Error(`deploy ${cfg.name} failed on-chain: ${rn}`);
-      }
-      if (rn === "NOT_VOTED" || rn === "") notVoted++;
-      else notVoted = 0;
-      if (i % 5 === 0) console.log(`  ${cfg.name}: consensus... (${rn || "pending"}) notVoted=${notVoted}`);
-      if (notVoted >= 40) {
-        console.log(`  ${cfg.name}: tx stuck in NOT_VOTED for ~4 min — treating as dropped`);
-        return null; // dropped; caller decides whether to re-broadcast
-      }
-    } catch (e) {
-      if (/failed on-chain|not clean/.test(String(e))) throw e;
-    }
-    await sleep(6000);
+async function settle(cfg, genTxId) {
+  let tx;
+  try {
+    tx = await waitFinality(client, genTxId, cfg.name + " deploy", 120);
+  } catch (e) {
+    if (/exec failed|canceled/i.test(String(e))) throw e;
+    return null; // timeout → treat as dropped, caller re-broadcasts
   }
-  throw new Error(`timeout waiting for ${cfg.name} deploy finality`);
+  const address = tx?.txDataDecoded?.contractAddress ?? tx?.recipient;
+  console.log(`  ${cfg.name}: ${address} (${tx?.txExecutionResultName})`);
+  console.log("  explorer:", EXPLORER + "/tx/" + genTxId);
+  const cfgJson = JSON.parse(await client.readContract({ address, functionName: "get_config", args: [] }));
+  console.log("  config: min_stake=" + cfgJson.min_stake, "rules_version=" + cfgJson.rules_version, "owner=" + cfgJson.owner);
+  const record = {
+    address: String(address), txHash: String(genTxId),
+    txLink: EXPLORER + "/tx/" + genTxId,
+    params: {
+      default_rules: cfg.default_rules,
+      min_stake: String(cfg.min_stake), report_bond: String(cfg.report_bond),
+      appeal_bond: String(cfg.appeal_bond),
+      enforce_timeout_sec: String(cfg.enforce_timeout_sec),
+      appeal_resolve_cooldown_sec: String(cfg.appeal_resolve_cooldown_sec),
+      appeal_timeout_sec: String(cfg.appeal_timeout_sec),
+      llm_cooldown_sec: String(cfg.llm_cooldown_sec),
+      max_open_reports: cfg.max_open_reports, max_open_appeals: cfg.max_open_appeals,
+    },
+    owner: cfgJson.owner,
+  };
+  state[cfg.name] = record;
+  saveState();
+  return record;
 }
 
 async function deployOne(cfg) {
@@ -148,24 +130,21 @@ async function deployOne(cfg) {
   // resume: a tx was already broadcast — poll it instead of re-deploying
   if (state[cfg.name]?.txHash) {
     console.log(`${cfg.name}: resuming pending deploy tx ${state[cfg.name].txHash}`);
-    const settled = await settle(cfg, state[cfg.name].txHash);
+    const settled = await settle(cfg, state[cfg.name].txHash).catch((e) => {
+      if (/exec failed|canceled/i.test(String(e))) throw e;
+      return null;
+    });
     if (settled) return settled;
-    // tx was dropped from the queue: forget it and re-broadcast
     console.log(`${cfg.name}: re-broadcasting after dropped tx`);
     delete state[cfg.name];
     saveState();
   }
-  const args = [
-    cfg.default_rules, cfg.min_stake, cfg.report_bond, cfg.appeal_bond,
-    cfg.enforce_timeout_sec, cfg.appeal_resolve_cooldown_sec, cfg.appeal_timeout_sec,
-    cfg.llm_cooldown_sec, cfg.max_open_reports, cfg.max_open_appeals,
-  ];
   console.log(`Deploying registry_v2 (${cfg.name})...`);
-  const txHash = await deployContractSafe({ code, args });
-  console.log("  deploy tx:", txHash);
-  state[cfg.name] = { txHash: String(txHash) };
+  const { genTxId } = await broadcastSafe(cfg);
+  console.log("  deploy genTxId:", genTxId);
+  state[cfg.name] = { txHash: String(genTxId) };
   saveState(); // persist BEFORE waiting: a rerun resumes instead of double-deploying
-  const settled = await settle(cfg, String(txHash));
+  const settled = await settle(cfg, genTxId);
   if (!settled) throw new Error(`${cfg.name}: deploy tx dropped from queue; re-run to retry`);
   return settled;
 }

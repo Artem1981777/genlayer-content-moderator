@@ -13,7 +13,10 @@
     "e2e": "node --env-file=.env scripts/test.mjs"
   },
   "dependencies": {
-    "genlayer-js": "^1.1.8",
+    "genlayer-js": "^2.0.0-rc.1",
     "viem": "^2.55.18"
+  },
+  "devDependencies": {
+    "genlayer": "^0.39.2"
   }
 }

@@ -1,11 +1,13 @@
 // Shared client helpers for ContentModerator v2 scripts (genlayer-js).
-// Every write waits for ACCEPTED receipt, then polls execution finality.
-// Retries only transient RPC errors BEFORE broadcast (no double-send):
-// a failed writeContract may or may not have broadcast, so retries go through
-// the consensus-error filter that only matches pre-broadcast failures.
+// Reads go through genlayer-js gen_call. Writes are broadcast through the
+// flat AddTransaction path (scripts/lib/sender.mjs): the Bradbury consensus
+// contract only accepts addTransaction(_sender,_recipient,_validators,
+// _maxRotations,_txData,_validUntil); the struct variant encoded by
+// genlayer-js ≤2.0.0-rc.1 reverts on-chain.
 import { createClient, createAccount } from "genlayer-js";
 import { testnetBradbury } from "genlayer-js/chains";
-import { TransactionStatus } from "genlayer-js/types";
+import { encodeWriteTxData, encodeDeployTxData } from "./txbuild.mjs";
+import { broadcastAddTransaction, waitFinality } from "./sender.mjs";
 
 export const RPC = "https://rpc-bradbury.genlayer.com";
 export const EXPLORER = "https://explorer-bradbury.genlayer.com";
@@ -38,38 +40,27 @@ function retriable(msg) {
 }
 
 export async function waitFinal(client, hash, label, maxIters = 90) {
-  for (let i = 0; i < maxIters; i++) {
-    let tx = null;
-    try {
-      tx = await client.getTransaction({ hash });
-    } catch (e) {
-      await sleep(5000);
-      continue;
-    }
-    const rn = String(tx?.txExecutionResultName || "");
-    if (rn === "FINISHED" || rn === "FINISHED_WITH_RETURN") return tx;
-    if (/ERROR|REVERT|ROLL|DISAGREE|UNDETERMIN/i.test(rn)) {
-      throw new Error("exec failed " + label + ": " + rn);
-    }
-    if (i % 5 === 0) console.log("  waiting finality " + label + " (" + (rn || "pending") + ")");
-    await sleep(6000);
-  }
-  throw new Error("timeout finality " + label);
+  return waitFinality(client, hash, label, maxIters);
 }
 
 export async function write(client, address, fn, args = [], value = 0n, label = null) {
   const name = label || fn;
+  const account = client.account;
+  if (!account) throw new Error("client has no account — create it via clientFor(accountFrom(key))");
   for (let attempt = 1; attempt <= 8; attempt++) {
     try {
-      const hash = await client.writeContract({ address, functionName: fn, args, value });
-      await client.waitForTransactionReceipt({ hash, status: TransactionStatus.ACCEPTED, retries: 400 });
-      const tx = await waitFinal(client, hash, name);
-      console.log("  " + name + " tx:", hash);
-      return { hash, tx };
+      const txData = encodeWriteTxData(fn, args, {});
+      const { genTxId } = await broadcastAddTransaction(client, account, {
+        recipient: address, txData,
+      });
+      if (!genTxId) throw new Error("AddTransaction broadcast but no EVM receipt yet");
+      const tx = await waitFinality(client, genTxId, name);
+      console.log("  " + name + " tx:", genTxId);
+      return { hash: genTxId, tx };
     } catch (e) {
       const msg = e?.message || String(e);
       console.log("  " + name + " attempt " + attempt + ": " + msg.slice(0, 110));
-      if (retriable(msg) && attempt < 8) {
+      if (attempt < 8) {
         await sleep(15000);
         continue;
       }
