@@ -12,3 +12,4 @@ contract.txt
 *-tx.txt
 *.v12bak
 *.bak
+*.log
