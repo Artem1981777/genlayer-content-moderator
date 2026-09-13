@@ -97,10 +97,14 @@ export async function broadcastAddTransaction(client, account, { recipient, txDa
   };
 
   const mineReceipt = async (evmHash) => {
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 180; i++) {
       await sleep(5000);
       const receipt = await rpc("eth_getTransactionReceipt", [evmHash]).catch(() => null);
       if (receipt) return receipt;
+      if (i > 0 && i % 12 === 0) {
+        const pending = await rpc("eth_getTransactionByHash", [evmHash]).catch(() => null);
+        console.log(`  evm ${evmHash.slice(0, 14)}…: ${pending ? (pending.blockNumber ? "mining" : "in mempool") : "unknown to node"} (${i * 5}s)`);
+      }
     }
     return null;
   };
