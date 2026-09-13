@@ -1,0 +1,34 @@
+name: Deploy contract (manual)
+
+# Deploys registry_v2 prod + demo to Bradbury and commits deployments.json.
+# Requires repository secret PRIVATE_KEY (funded Bradbury key).
+# Trigger: Actions -> Deploy contract (manual) -> Run workflow.
+# This exists because the maintainer's local network resets large outbound
+# payloads; CI runners have healthy MTU.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install deps
+        run: npm install --no-audit --no-fund
+      - name: Deploy prod + demo
+        env:
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+        run: node scripts/deploy.mjs
+      - name: Commit deployments.json
+        run: |
+          git config user.name "deploy-bot"
+          git config user.email "deploy-bot@users.noreply.github.com"
+          git add deployments.json
+          git commit -m "chore: registry_v2 deployments (prod + demo) [skip ci]" || echo "no changes"
+          git push
