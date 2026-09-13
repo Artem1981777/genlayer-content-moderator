@@ -38,7 +38,7 @@ export function short(addr: string, n = 6) {
   return addr ? `${addr.slice(0, n + 2)}…${addr.slice(-4)}` : "—";
 }
 
-export function KpiCards({ stats }: { stats: RegistryStats | null }) {
+export function KpiCards({ stats }: { stats: RegistryStats | null | undefined }) {
   const cards = stats
     ? [
         { label: "Items", value: stats.total },

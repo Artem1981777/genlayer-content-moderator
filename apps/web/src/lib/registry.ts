@@ -25,7 +25,7 @@ export async function getBrowserRegistry(): Promise<RegistryClient | null> {
 }
 
 // ---------------------------------------------------------------- SWR hooks
-const fetcher = async (key: readonly string[]) => {
+const fetcher = async (key: readonly string[]): Promise<unknown> => {
   const reg = await getBrowserRegistry();
   if (!reg) return null;
   const [fn, ...rest] = key;
@@ -50,41 +50,41 @@ const fetcher = async (key: readonly string[]) => {
 };
 
 export function useStats() {
-  return useSWR<RegistryStats | null>(["stats"], fetcher, { refreshInterval: 7000 });
+  return useSWR<RegistryStats | null>(["stats"], fetcher as never, { refreshInterval: 7000 });
 }
 
 export function useConfig() {
-  return useSWR<RegistryConfig | null>(["config"], fetcher, { refreshInterval: 15000 });
+  return useSWR<RegistryConfig | null>(["config"], fetcher as never, { refreshInterval: 15000 });
 }
 
 export function useItems(offset = 0, limit = 20, statusFilter = "") {
   return useSWR<ItemsPage | null>(
     ["items", String(offset), String(limit), statusFilter],
-    fetcher,
+    fetcher as never,
     { refreshInterval: 7000 },
   );
 }
 
 export function useItem(itemId: string | null) {
-  return useSWR<ModerationItem | null>(itemId ? ["item", itemId] : null, fetcher, {
+  return useSWR<ModerationItem | null>(itemId ? ["item", itemId] : null, fetcher as never, {
     refreshInterval: 7000,
   });
 }
 
 export function useReputation(addr: string | null) {
-  return useSWR<Reputation | null>(addr ? ["reputation", addr] : null, fetcher, {
+  return useSWR<Reputation | null>(addr ? ["reputation", addr] : null, fetcher as never, {
     refreshInterval: 10000,
   });
 }
 
 export function useRules(version: number | null) {
-  return useSWR<RuleSetView | null>(version ? ["rules", String(version)] : null, fetcher);
+  return useSWR<RuleSetView | null>(version ? ["rules", String(version)] : null, fetcher as never);
 }
 
 export function usePayouts(offset = 0, limit = 50) {
   return useSWR<PayoutsPage | null>(
     ["payouts", String(offset), String(limit)],
-    fetcher,
+    fetcher as never,
     { refreshInterval: 10000 },
   );
 }

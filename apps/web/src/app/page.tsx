@@ -2,7 +2,7 @@
 
 import { Shell } from "@/components/shell";
 import { useStats, useConfig } from "@/lib/registry";
-import { KpiCards } from "@/components/registry-ui";
+import { KpiCards, short } from "@/components/registry-ui";
 import Link from "next/link";
 import { ArrowRight, Gavel, Landmark, ShieldCheck } from "lucide-react";
 

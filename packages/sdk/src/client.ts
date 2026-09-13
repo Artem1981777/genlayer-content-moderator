@@ -14,7 +14,7 @@ import type {
   RegistryStats,
   Reputation,
   RuleSetView,
-} from "./types.js";
+} from "./types";
 
 export interface GenLayerClientLike {
   readContract(args: {

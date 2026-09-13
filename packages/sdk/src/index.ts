@@ -1,9 +1,9 @@
-export * from "./types.js";
-export { RegistryClient } from "./client.js";
-export type { RegistryClientOptions, GenLayerClientLike } from "./client.js";
+export * from "./types";
+export { RegistryClient } from "./client";
+export type { RegistryClientOptions, GenLayerClientLike } from "./client";
 
-import { RegistryClient } from "./client.js";
-import type { RegistryClientOptions } from "./client.js";
+import { RegistryClient } from "./client";
+import type { RegistryClientOptions } from "./client";
 import { createClient, createAccount } from "genlayer-js";
 import { testnetBradbury } from "genlayer-js/chains";
 
