@@ -43,3 +43,45 @@ jobs:
           for f in scripts/*.mjs; do
             node --check "$f"
           done
+
+  sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install
+        run: npm install --no-audit --no-fund
+        working-directory: packages/sdk
+      - name: Typecheck
+        run: npx tsc --noEmit
+        working-directory: packages/sdk
+      - name: Test
+        run: npx vitest run
+        working-directory: packages/sdk
+
+  apps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install workspace deps
+        run: npm install --no-audit --no-fund
+      - name: Install app deps (web)
+        run: npm install --no-audit --no-fund
+        working-directory: apps/web
+      - name: Install app deps (api)
+        run: npm install --no-audit --no-fund
+        working-directory: apps/api
+      - name: Typecheck web
+        run: npx tsc --noEmit
+        working-directory: apps/web
+      - name: Typecheck api
+        run: npx tsc --noEmit
+        working-directory: apps/api
+      - name: Build web (static export)
+        run: npm run build
+        working-directory: apps/web

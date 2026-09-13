@@ -2,6 +2,36 @@
 
 All notable changes to **ContentModerator**. Commit links point to the repository history.
 
+## [v2.0.0] — 2026-09-13 — Typed-storage rewrite, code-defined consensus, permissionless appeals, SDK/API/dApp
+
+Monorepo rewrite of the accepted v1.2. Delta with per-item verification: `docs/MILESTONE-v2.md`.
+
+### Architecture / Security
+- Native GenVM storage structures (`@allow_storage` dataclasses, `TreeMap[str, Item]`, typed indexes, `u64/u256`) replacing JSON-string blobs — `contracts/registry_v2.py`
+- Equivalence Principle via explicit `gl.vm.run_nondet_unsafe(leader, validator)` (fetch → extract → decide); validator agreement defined in code: verdict equality, per-axis score tolerance ≤15, injection band >50 — replaces `prompt_comparative`
+- Classified errors `[EXTERNAL]` / `[TRANSIENT]` / `[LLM_ERROR]` + docs `_handle_leader_error` pattern; fetch failures no longer become empty content
+- Deterministic time via `datetime.now(timezone.utc)` (tx timestamp per docs); removed the `gl.message_raw["datetime"]` hack
+- Deterministic canonical-FLAG fallback on malformed LLM output (now explicitly implemented and tested)
+- Canary echo removed (reliability dependency inside consensus; detection via the numeric `injection_attempt` axis) — documented in SECURITY.md
+- One contract replaces `registry.py` + `registry_demo.py`: all timeouts/economic constants/caps are validated `__init__` params
+- 77 direct in-memory GenVM tests (`tests/direct/`) incl. every settlement branch, validator-agreement tests via `run_validator`, and a stake-conservation invariant; `genvm-lint` + pytest in CI
+
+### New functionality
+- Permissionless consensus `resolve_appeal()` (cooldown-gated, outcome from an independent EP round with appellant context; **owner verdict power removed**)
+- Versioned rules (`RuleSet` snapshots, `get_rules(version)`) and per-axis bps thresholds (`set_thresholds`)
+- Reputation with deterministic report-bond discount (80% at ≥3 reports, ≥70% honesty)
+- `moderate_batch` (≤5, per-item error handling) and full view surface (`get_stats`, `get_reputation`, `get_items_by_author|reporter|status`, …)
+
+### New deployment
+- `scripts/deploy.mjs` deploys prod (86400/3600/172800 s) + demo (60 s) instances → `deployments.json`; on-chain proof suite `scripts/proofs-v2.mjs` (resumable) → `docs/evidence/v2/`. Deployment execution pending — local network resets large outbound payloads (see MILESTONE-v2).
+
+### New integration
+- `packages/sdk` — `@genlayer-cm/sdk`: typed client, finality-aware writes with pre-broadcast retries, poll subscriptions (10 vitest tests)
+- `apps/api` — Moderation-as-a-Service Route Handlers (`/api/items`, `/api/items/{id}`, `/api/stats`, `/api/reputation/{addr}`, `/api/moderate`, `/api/badge/{id}.svg`, OpenAPI) with rate limiting and read caching
+
+### dApp (major feature)
+- `apps/web` — Next.js App Router (static export for GitHub Pages): live landing stats, registry explorer, item forensics (status stepper, 7-axis radar, injection indicator, stake ledger, timeline, role-aware actions), submit wizard, reputation and versioned-rules pages; EIP-1193 wallet with Bradbury network guard; embed widget `public/embed.js`; legacy `registry.html`/`index.html` moved to `docs/legacy/`
+
 ## [v1.2.0] — 2026-08-30 — Economic hardening (minimal surgical state-machine patches) — tag `v1.2.0`
 
 Redeployed to Bradbury `0x62A9196dBB55585840D13631aB7C68288761a74A` — deploy tx [`0x3f93bb95`](https://explorer-bradbury.genlayer.com/tx/0x3f93bb9574627afdc0bd41caa79e0b8e329004b7098915ad0c9de61db0425c47). No architecture, consensus, or ingest changes; `registry.html` only had its contract-address pointer repointed.

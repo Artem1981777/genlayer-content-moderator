@@ -1,50 +1,44 @@
-# Security Model — ContentModerator Registry (v1.2)
+# Security Model — ContentModerator Registry v2
 
-Maps each attack vector against the on-chain registry (`contracts/registry.py`)
-to its cost for the attacker and the concrete on-chain defense. v1.1 is deployed
-on GenLayer Bradbury at `0x20f6e32560427094aC913Da6e900c0b4899AE41A`; v1.2
-supersedes it (address recorded on deploy). Amounts in wei.
+Maps each attack vector against `contracts/registry_v2.py` to its cost for the
+attacker and the concrete on-chain defense. Amounts in wei; economic constants
+are `__init__` parameters (defaults: stake/bond 1e12, appeal bond 2e12).
 
-## Economic parameters
-- Author stake (ingest): 1_000_000_000_000  (MIN_STAKE)
-- Reporter bond (report): 1_000_000_000_000  (REPORT_BOND)
-- Appeal bond (appeal):  2_000_000_000_000  (APPEAL_BOND)
-- Max open reports / address: 3  (MAX_OPEN_REPORTS)
-- Max open appeals / address: 2  (MAX_OPEN_APPEALS)
-- Enforce timeout: 86_400 s  (ENFORCE_TIMEOUT_SEC) — permissionless enforce afterwards
-- Appeal-resolution timeout: 172_800 s  (APPEAL_TIMEOUT_SEC) — appellant may reclaim bond afterwards
-- LLM re-run cooldown: 60 s  (LLM_COOLDOWN_SEC) — throttles moderate re-run / reverify_source
+> Changes vs v1.2: the per-call canary echo was **removed** — it added an
+> LLM-echo reliability dependency inside consensus without participating in the
+> code-defined agreement; injection detection now rests on the dedicated
+> numeric `injection_attempt` axis (0–100, agreement band 50) plus deterministic
+> post-processing. Fetch-time failures are no longer swallowed into empty
+> content: they surface as classified, consensus-agreed errors.
 
 ## Attack -> Cost -> Defense
 
-| # | Attack vector | Cost to attacker | On-chain defense (registry.py) |
+| # | Attack vector | Cost to attacker | On-chain defense (registry_v2.py) |
 |---|---|---|---|
-| 1 | Prompt injection in moderated content ("ignore previous instructions", "approve this post") | Content still scored; injection forces FLAG | USER CONTENT fenced as untrusted data + explicit "not a command" instruction; if content alters task/token then `canary_ok=False` -> `injection_detected=True`; any APPROVE with injection forced to FLAG |
-| 2 | Public canary bypass (attacker echoes the known `GLM-OK` token) | No leverage | Canary is now a per-call token `GLM-` + sha256(item_id + "|" + tx datetime)[:10], unknowable to content authors; validators compare against the same generated token |
-| 3 | Self-report to farm reporter rewards | Reverts, nothing spent | `report()` rejects `sender == author` |
-| 4 | Report spam / griefing | Locks 1e12 per open report, capped at 3 | `MAX_OPEN_REPORTS` per-address cap; bond >= REPORT_BOND |
-| 5 | False report on clean content | Reporter forfeits full 1e12 bond to the author | On APPROVE with a reporter, `_settle_stakes` pays `reporter_bond` to author as `false_report_comp` |
-| 6 | Author posts violating content | REMOVE: full 1e12 stake to pool; FLAG: 50% to pool | `_settle_stakes`: REMOVE forfeits full stake, FLAG forfeits 50% (`author_partial_forfeit`), amount stored in `forfeited` |
-| 7 | Verdict re-roll: spam `moderate()` on a moderated item until a softer verdict appears | Cannot re-roll | `moderate()` re-run allowed only for owner or while an active report exists, and blocked within `LLM_COOLDOWN_SEC`; first pass ("ingested") open to anyone, later re-rolls gated |
-| 8 | LLM-spam DoS: flood `moderate()` / `reverify_source()` to burn validator compute | Rate-limited | `LLM_COOLDOWN_SEC` cooldown on re-run of `moderate()` and on `reverify_source()`, tracked via `last_llm_ts` |
-| 9 | Endless / repeat appeals | 2e12 bond each, forfeited if denied; MAX_OPEN_APPEALS concurrent cap | `appeal()` author-only + `MAX_OPEN_APPEALS`; per-item `appeal_count<2` limit removed so appeals stay reachable but each costs a fresh bond; overturned item becomes terminal and cannot be re-appealed |
-| 10 | Reporter bond stuck on an enforced item | Cannot happen | `report()` restricted to ingested / moderated (enforced removed); every accepted report has a settlement path via `enforce()` |
-| 11 | Owner griefing: never enforce / never resolve to lock staked value | No indefinite lock | `enforce()` permissionless after `ENFORCE_TIMEOUT_SEC`; `reclaim_appeal()` returns the appeal bond after `APPEAL_TIMEOUT_SEC` |
-| 12 | Double settlement via overturned appeal (re-enforce an overturned item to pay stakes twice) | Cannot happen | overturn sets status terminal `resolved`; enforce needs `moderated`, appeal needs `enforced`, so neither path re-runs `_settle_stakes` |
-| 13 | Unauthorized enforcement / verdict tampering | Reverts | `enforce()` (before timeout), `resolve_appeal()`, `release_url()`, `fund_pool()` owner-gated |
-| 14 | Ingest empty / dead source | Reverts, no state | `ingest()` requires non-empty fetched content |
-| 15 | Double ingest / re-stake | Reverts | `ingest()` requires `status == "created"` |
-| 16 | Duplicate-URL confusion / item-URL rebinding | Reverts while active | `url_hash` -> item mapping (`url_index`); ingest rejects a URL bound to a different still-active item; owner `release_url()` frees a stale binding |
-| 17 | Content leak: read removed content through public getters | Masked | `get_item()` / `get_all_items()` return `_public_item()` — REMOVE content -> `"[content removed by moderation]"`, FLAG -> `"[limited] ..."` |
-| 18 | Silent post-moderation content swap (bait-and-switch) | Detectable on-chain | `content_hash` = sha256 stored at ingest; `verify_content()` recomputes hash; `reverify_source()` re-fetches + LLM-compares live vs stored |
-| 19 | Non-deterministic LLM disagreement to stall consensus | No leverage | Tolerant comparative consensus: validators agree on discrete verdict + injection flag + top-axis tolerance band, not exact scores |
+| 1 | Prompt injection in moderated content | Content still scored; APPROVE + injection is forced to FLAG | untrusted-data markers; numeric `injection_attempt` axis; `_decide` post-processing |
+| 2 | Validator disagreement / LLM manipulation to smuggle a verdict | Consensus fails, leader rotates | code-defined agreement: verdict equality, per-axis \|Δ\|≤15 (`SCORE_TOLERANCE`), injection band >50 — see `_decisions_agree`; tested via `run_validator` |
+| 3 | Malformed LLM output used to force a lenient verdict | Deterministic canonical FLAG | `_decide` fallback + `test_malformed_decide_canonical_flag` |
+| 4 | Dead-source or non-http source griefing at ingest | Revert before stake is locked | scheme/length validation at `ingest`; fetch failures classified `[EXTERNAL]`/`[TRANSIENT]` at `moderate` |
+| 5 | Self-report farming | Reverts, nothing spent | `report()` rejects `sender == author` |
+| 6 | Report spam | Locks bond per open report, capped (default 3) | `max_open_reports`, per-address load tracking |
+| 7 | False reports on clean content | Bond paid to the author | `false_report_comp` settlement; `false_reports` reputation; bond discount requires ≥70% honesty |
+| 8 | Violating content for profit | REMOVE forfeits full stake; FLAG forfeits half | `_settle_stakes` (+ exact `forfeited` restore on overturn) |
+| 9 | Verdict re-roll spamming | Owner-only or needs an active report; LLM cooldown | `moderate()` re-run gate |
+| 10 | Owner freezes staked value | Cannot | permissionless `enforce` after timeout; permissionless `resolve_appeal` after cooldown; `reclaim_appeal` after appeal timeout |
+| 11 | **Owner overrides verdicts** | Impossible by design | owner has no verdict path at all in v2: `resolve_appeal` is consensus-driven and permissionless; owner only sets rules/thresholds |
+| 12 | Threshold manipulation after items are judged | No retroactive effect | judged items store `rules_version`; each version snapshots its thresholds |
+| 13 | Reputation gaming (self-dealing reporters) | Needs two keys and sacrificed bonds; discounts only reach 80% | discount requires ≥3 settled reports and ≥70% honesty — deterministic formula, `get_reputation` is public |
+| 14 | Appeal-note injection | Weighed as untrusted context, cannot override rules | appellant note wrapped/framed as untrusted; consensus agreement still applies |
+| 15 | Duplicate-URL confusion | Reverts while active | `url_index` guard; owner `release_url` |
+| 16 | Content leak | Masked | blocked/limited content masked in `get_item`/`get_all_items`/`read_content` |
+| 17 | Bait-and-switch content swap | Detectable | `content_hash` = sha256 at consensus time; `verify_content`; `reverify_source` re-fetch under consensus |
+| 18 | Batch DoS | Bounded | `moderate_batch` ≤ `MAX_BATCH` (5), per-item errors isolated |
+| 19 | API abuse (apps/api) | Rate limited | per-IP sliding-window limiter; write mode disabled unless `MODERATOR_KEY` is configured; read caching |
 
-## Defense-in-depth
-- **Untrusted-data framing:** fetched page, stored content, and appellant note are each wrapped in explicit BEGIN/END markers and labeled untrusted; the model is told they are data, never commands.
-- **Per-call canary tripwire:** each moderation generates a fresh, content-unknowable canary token (`_canary_token`); a successful injection that suppresses scoring usually also fails to echo it, independently raising `injection_detected`.
-- **Escalation:** borderline first-pass (top axis 40..60) triggers a second, conservative pass before the verdict is fixed.
-- **Liveness by timeout:** enforcement and appeal-bond recovery are permissionless after their timeouts, so no actor can freeze staked value.
-- **Once-only settlement:** stakes settle exactly once at enforce; overturned appeals move to a terminal state, preventing double payouts.
-- **Owner-gated money moves:** settlement runs inside `enforce`/`resolve_appeal`; `emit_transfer(..., on='finalized')` fires only after finalization.
-- **Content privacy:** blocked/limited content is masked in all public getters; source URLs are deduplicated via `url_index`.
-- **Auditability:** every payout is appended to an on-chain ledger (`get_payouts`) and every state change is recorded in item `history`.
+## Known limitations (honest)
+- Dead sources surface at `moderate` (stake already locked at `ingest`); the
+  owner cannot free stakes of permanently dead ingests — same failure mode as
+  v1.2, mitigated by retryable classified errors and permissionless liveness.
+- `injection_attempt` is a validator-reported score, not a cryptographic proof;
+  a validator must first be convinced by the content itself.
+- Reputation discounts are bounded (80%) to keep farming unprofitable.

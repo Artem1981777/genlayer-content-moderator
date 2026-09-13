@@ -13,3 +13,5 @@ contract.txt
 *.v12bak
 *.bak
 *.log
+.next/
+out/

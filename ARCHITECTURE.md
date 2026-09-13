@@ -1,111 +1,98 @@
-# Architecture — ContentModerator Registry (v1.2)
+# Architecture — ContentModerator Registry v2
 
-An on-chain, multi-item content-moderation registry where every
-consensus-critical decision (content extraction, policy verdict, source
-re-verification) is made inside the Intelligent Contract via the GenLayer
-Equivalence Principle. Source: `contracts/registry.py`. v1.1 is deployed on
-Bradbury at `0x20f6e32560427094aC913Da6e900c0b4899AE41A`; v1.2 supersedes it
-(deployment address recorded in CHANGELOG.md / README on deploy).
+Monorepo: `contracts/registry_v2.py` (Intelligent Contract), `packages/sdk`
+(TS client), `apps/api` (Moderation-as-a-Service), `apps/web` (Next.js dApp),
+`tests/direct` (77 in-memory GenVM tests). v1 lineage (`moderator.py`,
+`registry.py`, legacy dApp) is retained for history.
 
-## Item lifecycle (state machine)
+## State machine
 
 ```mermaid
 stateDiagram-v2
     [*] --> created: create_item()
-    created --> ingested: ingest() + author stake (URL dedup)
-    ingested --> moderated: moderate() (AI verdict)
-    moderated --> moderated: moderate() re-run [owner or active report; LLM cooldown]
-    moderated --> enforced: enforce() [owner, or anyone after ENFORCE_TIMEOUT] + settle stakes
-    enforced --> appealed: appeal() [author] + appeal bond
-    appealed --> resolved: resolve_appeal() upheld -> overturned (terminal)
-    appealed --> enforced: resolve_appeal() denied (re-appealable)
-    appealed --> enforced: reclaim_appeal() [owner/author after APPEAL_TIMEOUT] + bond returned
+    created --> ingested: ingest() + author stake (URL validation, dedup)
+    ingested --> moderated: moderate() — EP consensus (fetch → extract → decide)
+    moderated --> moderated: re-run [owner or active report; LLM cooldown]
+    moderated --> enforced: enforce() [owner, or anyone after timeout] + settle
+    enforced --> appealed: appeal() [author] + bond
+    appealed --> resolved: resolve_appeal() — permissionless consensus, overturned
+    appealed --> enforced: resolve_appeal() — upheld / reclaim_appeal() [after timeout]
     enforced --> [*]
     resolved --> [*]
-    note right of ingested
-        report() [bond] is allowed only while status is
-        ingested / moderated (enforced removed in v1.2) and
-        does not itself change the status
-    end note
 ```
 
-## State transitions
+`enforce()`, `resolve_appeal()` and `reclaim_appeal()` all have permissionless
+timeouts: no actor can freeze staked value. Time is
+`datetime.now(timezone.utc)` — bound by GenLayer to the transaction timestamp
+(deterministic per docs); tests advance it with `vm.warp()`.
 
-| From | Function | Guard | To |
-|---|---|---|---|
-| - | create_item(rules) | any sender | created |
-| created | ingest(id,url) payable | status==created, value>=MIN_STAKE, content non-empty, URL not bound to another active item | ingested |
-| ingested/moderated | report(id) payable | sender!=author, not already reported, open reports<MAX_OPEN_REPORTS, value>=REPORT_BOND | (unchanged) |
-| ingested | moderate(id) | content non-empty | moderated |
-| moderated | moderate(id) re-run | owner OR active report present, AND not within LLM_COOLDOWN_SEC | moderated |
-| moderated | enforce(id) | owner, OR any sender after ENFORCE_TIMEOUT_SEC since verdict_ts | enforced (+ stake settlement) |
-| enforced | appeal(id,note) payable | author only, not already overturned, open appeals<MAX_OPEN_APPEALS, value>=APPEAL_BOND | appealed |
-| appealed | resolve_appeal(id) | owner only | resolved (if overturned) / enforced (if denied) |
-| appealed | reclaim_appeal(id) | owner or author, after APPEAL_TIMEOUT_SEC since appeal_ts | enforced (appeal bond returned) |
+## Typed storage
 
-`enforce()` is permissionless after `ENFORCE_TIMEOUT_SEC` and `reclaim_appeal()`
-after `APPEAL_TIMEOUT_SEC`, so no staked value can be locked indefinitely by an
-inactive owner. Timers use the transaction datetime (`gl.message_raw["datetime"]`),
-since GenLayer transaction context exposes no block number/height.
+```text
+Item (@allow_storage)      id, source, url_hash, creator/author/reporter,
+                           rules_version, content(+hash), status, verdict,
+                           per-axis u8 scores, injection_attempt u8, flags,
+                           stakes u256, timestamps u64, history DynArray<HistoryEntry>
+TreeMap[str, Item]         items
+TreeMap[str, u8]           report_load / appeal_load (per-address caps)
+TreeMap[str, str]          url_index (sha256(url) → item)
+TreeMap[str, Reputation]   reputation
+TreeMap[str, DynArray[str]] author / reporter / status indexes
+DynArray[RuleSet]          rules_versions (text + per-axis bps snapshot)
+DynArray[Payout]           payouts ledger
+```
 
-## Verdict engine (`_compute_verdict`)
+JSON is emitted only inside views; all logic reads/writes native structures.
+Non-deterministic blocks never touch storage: `moderation_pass` copies the url,
+rules text and per-axis bps thresholds into plain values before the nondet
+block (docs: Storage > non-determinism).
 
-Non-deterministic reasoning collapsed to a deterministic on-chain result:
-
-1. **Extraction** (`_fetch_content`): `gl.nondet.web.render` + LLM extraction of the primary user content, agreed via comparative Equivalence Principle.
-2. **Scoring** (`run_pass`): 7 policy axes (scam, spam, harassment, hate, violence, sexual, self_harm) scored 0-100, plus `injection_attempt` and a per-call randomized canary token (`GLM-` + sha256(item_id + "|" + tx datetime)[:10]), replacing the old static `GLM-OK`.
-3. **Escalation**: if top axis is borderline (ESCALATE_LO 40 <= top <= ESCALATE_HI 60), a second, stricter pass runs.
-4. **Verdict mapping**:
-   - top >= 80  -> REMOVE  (severity high)
-   - 50 <= top < 80 -> FLAG (severity medium)
-   - top < 50  -> APPROVE
-   - injection detected + APPROVE -> forced FLAG
-   - confidence = min(100, abs(top - 50) * 2); needs_review if confidence < 40
-5. **Consensus**: `gl.eq_principle.prompt_comparative` — validators must agree on the discrete verdict + injection flag + top-axis tolerance band, NOT exact scores, so independent LLM runs converge. The per-call canary is passed into the prompt and every validator checks against the same token.
+## Equivalence Principle round
 
 ```mermaid
 sequenceDiagram
-    participant U as Caller
     participant C as Contract
-    participant V as Validators (LLM)
-    U->>C: moderate(item_id)
-    C->>C: token = _canary_token(item_id)
-    C->>V: get_answer() via eq_principle.prompt_comparative
-    V->>V: run_pass(strict=False) -> scores, canary
-    alt top axis 40..60 (borderline)
-        V->>V: run_pass(strict=True) escalated
-    end
-    V-->>C: agreed {verdict, injection, top-axis band}
-    C->>C: _set_verdict() -> status=moderated, verdict_ts set
-    C-->>U: verdict stored on-chain
+    participant L as Leader (validator)
+    participant V as Validators
+    C->>L: run_nondet_unsafe(leader_fn, validator_fn)
+    L->>L: 1. gl.nondet.web.render(url, mode="text") — [EXTERNAL]/[TRANSIENT] on failure
+    L->>L: 2. exec_prompt TASK:EXTRACT → main_text (≤6000 chars) — [LLM_ERROR] after 2 tries
+    L->>L: 3. exec_prompt TASK:DECIDE → scores(7 axes), injection_attempt, verdict, confidence
+    L->>L: deterministic post-processing: thresholds → verdict, injection auto-FLAG, malformed → canonical FLAG
+    V->>V: validator re-runs leader_fn
+    V-->>C: agree? verdict equal ∧ |Δscore|≤15/axis ∧ (injection>50) both-or-neither
 ```
 
-## Stake economics
+If the leader errored, the validator agrees only on the identical classified
+`UserError` (`_handle_leader_error`, docs pattern) — so failures propagate as
+reverts instead of becoming empty content. The leader's extracted content
+becomes the on-chain record (`content`, `content_hash`) once the decision is
+agreed; extracted text itself is intentionally not part of the agreement.
 
-| Actor | Locks | On REMOVE / FLAG | On APPROVE |
+## Verdicts from thresholds
+
+Each axis has owner-set `flag_bp` / `remove_bp` (≤10000, snapshotted per rules
+version). A top-axis score s maps to REMOVE when `s·100 ≥ remove_bp`, FLAG when
+`s·100 ≥ flag_bp`, else APPROVE. `injection_attempt > 50` (or canary-less
+detection) forces APPROVE up to FLAG. `confidence < 40` marks `needs_review`.
+
+## Economy
+
+| Actor | On APPROVE | On FLAG | On REMOVE |
 |---|---|---|---|
-| Author | MIN_STAKE 1e12 at ingest | REMOVE: full stake to pool (author_forfeit); FLAG: 50% to pool, 50% refunded (author_partial_forfeit) | refunded (author_refund) |
-| Reporter | REPORT_BOND 1e12 at report | bond returned + bonus = forfeited//2 paid from pool (reporter_reward) | bond forfeited to author (false_report_comp) |
-| Appellant (author) | APPEAL_BOND 2e12 at appeal | if denied: bond forfeited to pool | if overturned: bond refunded + exactly the previously forfeited amount restored from pool; item becomes terminal (resolved) |
+| Author | full refund | half forfeit (`author_partial_forfeit`) | full forfeit |
+| Reporter | bond paid to author (`false_report_comp`) | bond + forfeit/2 from pool | bond + forfeit/2 from pool |
+| Appellant | overturned: bond + exact `forfeited` restored from pool | (lighter verdict = overturned) | upheld: bond forfeited to pool |
 
-- **Partial FLAG economy (v1.2)**: a FLAG (score 50-79) now forfeits only 50% of the author stake; full forfeit is reserved for REMOVE (80+). The exact forfeited amount is stored per item (`forfeited`) so an overturned appeal restores precisely that, never over- or under-paying the pool.
-- **Pool**: accumulates forfeited stakes; funds honest-reporter bonuses and restored stakes; toppable by owner via `fund_pool()`.
-- **Payout ledger**: every transfer appended to an on-chain list (`get_payouts`) as `{to, amount, reason}`; transfers use `emit_transfer(value, on='finalized')`.
-- **Content integrity**: `content_hash` (sha256) stored at ingest; `verify_content()` recomputes it, `reverify_source()` re-fetches + LLM-compares live source vs stored content (rate-limited by LLM_COOLDOWN_SEC).
-- **No double settlement**: settlement runs once at `enforce()`; an overturned appeal moves the item to terminal `resolved`, so it can neither be re-enforced (needs `moderated`) nor re-appealed (needs `enforced`).
+Reputation: `approved/removed` per author, `honest_reports/false_reports` per
+reporter, `appeals_won`. Report bond = 80% of base when ≥3 settled reports and
+≥70% honesty (`get_required_report_bond`).
 
-## Content privacy
+## dApp & API boundary
 
-- URL/item binding: each source URL is hashed (`url_hash`) and mapped in `url_index`; ingest rejects a URL already bound to a *different* item still active (ingested / moderated / appealed). Owner can free a binding via `release_url()`; `get_item_by_url()` resolves a URL to its item.
-- Masking: `_public_item()` hides moderated content in public views — REMOVE-blocked items return `"[content removed by moderation]"`, FLAG-limited items are prefixed `"[limited] "`. Applies to `get_item()` and `get_all_items()`; unmasked content is never returned once an item is blocked.
-
-## Access control
-
-| Function | Caller |
-|---|---|
-| create_item, ingest, report | any address (report: not the author) |
-| appeal | item author only |
-| reclaim_appeal | item author or contract owner (after appeal timeout) |
-| moderate | first pass: any address; re-run: owner or when an active report exists (+ LLM cooldown) |
-| enforce | owner, or any address after ENFORCE_TIMEOUT_SEC (permissionless finality) |
-| resolve_appeal, fund_pool, release_url | contract owner only |
+All consensus-critical logic lives in the contract. `apps/web` reads state via
+the SDK over public RPC (SWR polling) and signs writes through an EIP-1193
+wallet (retries only before broadcast). `apps/api` exposes read endpoints plus
+`POST /api/moderate`, which is read-only unless the operator configures a
+service key. `public/embed.js` and `/api/badge/{id}.svg` let third parties show
+verdicts.

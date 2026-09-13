@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --accent: #d97706; /* amber-600: the single signal color */
+}
+
+html {
+  color-scheme: light dark;
+}
+
+/* addresses / hashes / amounts are always mono */
+.mono {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-variant-ligatures: none;
+}
