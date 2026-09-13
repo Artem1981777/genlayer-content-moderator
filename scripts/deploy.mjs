@@ -82,6 +82,64 @@ async function deployContractSafe(payload) {
   }
 }
 
+async function settle(cfg, txHash) {
+  // patient finality poll: contract-deploy consensus can take minutes.
+  // A tx stuck in NOT_VOTED for ~4 minutes is treated as dropped from the
+  // consensus queue; the caller then re-broadcasts (deployOne clears state).
+  let notVoted = 0;
+  for (let i = 0; i < 120; i++) {
+    let tx = null;
+    try {
+      tx = await client.getTransaction({ hash: txHash });
+      const rn = String(tx?.txExecutionResultName || "");
+      if (rn === "FINISHED" || rn === "FINISHED_WITH_RETURN") {
+        const address = tx?.txDataDecoded?.contractAddress ?? tx?.recipient;
+        const ok = tx?.txExecutionResultName === "FINISHED" || tx?.txExecutionResultName === "FINISHED_WITH_RETURN";
+        console.log(`  ${cfg.name}: ${address} (${tx?.txExecutionResultName})`);
+        console.log("  explorer:", EXPLORER + "/tx/" + txHash);
+        if (!ok) throw new Error("deploy not clean: " + tx?.txExecutionResultName);
+        const cfgJson = JSON.parse(await client.readContract({
+          address, functionName: "get_config", args: [],
+        }));
+        console.log("  config: min_stake=" + cfgJson.min_stake, "rules_version=" + cfgJson.rules_version,
+          "owner=" + cfgJson.owner);
+        const record = {
+          address: String(address), txHash: String(txHash),
+          txLink: EXPLORER + "/tx/" + txHash,
+          params: {
+            default_rules: cfg.default_rules,
+            min_stake: String(cfg.min_stake), report_bond: String(cfg.report_bond),
+            appeal_bond: String(cfg.appeal_bond),
+            enforce_timeout_sec: String(cfg.enforce_timeout_sec),
+            appeal_resolve_cooldown_sec: String(cfg.appeal_resolve_cooldown_sec),
+            appeal_timeout_sec: String(cfg.appeal_timeout_sec),
+            llm_cooldown_sec: String(cfg.llm_cooldown_sec),
+            max_open_reports: cfg.max_open_reports, max_open_appeals: cfg.max_open_appeals,
+          },
+          owner: cfgJson.owner,
+        };
+        state[cfg.name] = record;
+        saveState();
+        return record;
+      }
+      if (/ERROR|REVERT|ROLL|DISAGREE|UNDETERMIN/i.test(rn)) {
+        throw new Error(`deploy ${cfg.name} failed on-chain: ${rn}`);
+      }
+      if (rn === "NOT_VOTED" || rn === "") notVoted++;
+      else notVoted = 0;
+      if (i % 5 === 0) console.log(`  ${cfg.name}: consensus... (${rn || "pending"}) notVoted=${notVoted}`);
+      if (notVoted >= 40) {
+        console.log(`  ${cfg.name}: tx stuck in NOT_VOTED for ~4 min — treating as dropped`);
+        return null; // dropped; caller decides whether to re-broadcast
+      }
+    } catch (e) {
+      if (/failed on-chain|not clean/.test(String(e))) throw e;
+    }
+    await sleep(6000);
+  }
+  throw new Error(`timeout waiting for ${cfg.name} deploy finality`);
+}
+
 async function deployOne(cfg) {
   if (state[cfg.name]?.address) {
     console.log(`${cfg.name}: already deployed at ${state[cfg.name].address}`);
@@ -90,7 +148,12 @@ async function deployOne(cfg) {
   // resume: a tx was already broadcast — poll it instead of re-deploying
   if (state[cfg.name]?.txHash) {
     console.log(`${cfg.name}: resuming pending deploy tx ${state[cfg.name].txHash}`);
-    return await settle(cfg, state[cfg.name].txHash);
+    const settled = await settle(cfg, state[cfg.name].txHash);
+    if (settled) return settled;
+    // tx was dropped from the queue: forget it and re-broadcast
+    console.log(`${cfg.name}: re-broadcasting after dropped tx`);
+    delete state[cfg.name];
+    saveState();
   }
   const args = [
     cfg.default_rules, cfg.min_stake, cfg.report_bond, cfg.appeal_bond,
@@ -102,56 +165,9 @@ async function deployOne(cfg) {
   console.log("  deploy tx:", txHash);
   state[cfg.name] = { txHash: String(txHash) };
   saveState(); // persist BEFORE waiting: a rerun resumes instead of double-deploying
-  return await settle(cfg, String(txHash));
-}
-
-async function settle(cfg, txHash) {
-  // patient finality poll: contract-deploy consensus can take minutes
-  let tx = null;
-  for (let i = 0; i < 120; i++) {
-    try {
-      tx = await client.getTransaction({ hash: txHash });
-      const rn = String(tx?.txExecutionResultName || "");
-      if (rn === "FINISHED" || rn === "FINISHED_WITH_RETURN") break;
-      if (/ERROR|REVERT|ROLL|DISAGREE|UNDETERMIN/i.test(rn)) {
-        throw new Error(`deploy ${cfg.name} failed on-chain: ${rn}`);
-      }
-      if (i % 5 === 0) console.log(`  ${cfg.name}: consensus... (${rn || "pending"})`);
-    } catch (e) {
-      if (/failed on-chain/.test(String(e))) throw e;
-    }
-    await sleep(6000);
-    tx = null;
-  }
-  if (!tx) throw new Error(`timeout waiting for ${cfg.name} deploy finality`);
-  const address = tx?.txDataDecoded?.contractAddress ?? tx?.recipient;
-  const ok = tx?.txExecutionResultName === "FINISHED" || tx?.txExecutionResultName === "FINISHED_WITH_RETURN";
-  console.log(`  ${cfg.name}: ${address} (${tx?.txExecutionResultName})`);
-  console.log("  explorer:", EXPLORER + "/tx/" + txHash);
-  if (!ok) throw new Error("deploy not clean: " + tx?.txExecutionResultName);
-  const cfgJson = JSON.parse(await client.readContract({
-    address, functionName: "get_config", args: [],
-  }));
-  console.log("  config: min_stake=" + cfgJson.min_stake, "rules_version=" + cfgJson.rules_version,
-    "owner=" + cfgJson.owner);
-  const record = {
-    address: String(address), txHash: String(txHash),
-    txLink: EXPLORER + "/tx/" + txHash,
-    params: {
-      default_rules: cfg.default_rules,
-      min_stake: String(cfg.min_stake), report_bond: String(cfg.report_bond),
-      appeal_bond: String(cfg.appeal_bond),
-      enforce_timeout_sec: String(cfg.enforce_timeout_sec),
-      appeal_resolve_cooldown_sec: String(cfg.appeal_resolve_cooldown_sec),
-      appeal_timeout_sec: String(cfg.appeal_timeout_sec),
-      llm_cooldown_sec: String(cfg.llm_cooldown_sec),
-      max_open_reports: cfg.max_open_reports, max_open_appeals: cfg.max_open_appeals,
-    },
-    owner: cfgJson.owner,
-  };
-  state[cfg.name] = record;
-  saveState();
-  return record;
+  const settled = await settle(cfg, String(txHash));
+  if (!settled) throw new Error(`${cfg.name}: deploy tx dropped from queue; re-run to retry`);
+  return settled;
 }
 
 const deployments = {
