@@ -31,15 +31,18 @@ jobs:
           node-version: "22"
       - name: Install deps
         run: npm install --no-audit --no-fund
+      - name: Environment report
+        env:
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+        run: node scripts/diagnostics/env-report.mjs
       - name: Run script
         env:
           PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
         run: node "${{ inputs.script }}"
       - name: Commit artifacts
-        if: ${{ inputs.commit_evidence == 'true' }}
+        if: ${{ always() && inputs.commit_evidence == 'true' }}
         run: |
           git config user.name "deploy-bot"
           git config user.email "deploy-bot@users.noreply.github.com"
           git add deployments.json deploy-state.json docs/evidence/v2/ || true
-          git commit -m "chore: on-chain artifacts from ${{ inputs.script }} [skip ci]" || echo "no changes"
-          git push
+          git diff --cached --quiet || (git commit -m "chore: on-chain artifacts from ${{ inputs.script }} [skip ci]" && git push)

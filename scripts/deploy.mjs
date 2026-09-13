@@ -13,7 +13,7 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { accountFrom, clientFor, sleep, EXPLORER } from "./lib/client.mjs";
 import { encodeDeployTxData } from "./lib/txbuild.mjs";
-import { broadcastAddTransaction, waitFinality, rawRpc } from "./lib/sender.mjs";
+import { broadcastAddTransaction, waitFinality, rawRpc, dumpError } from "./lib/sender.mjs";
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 if (!PRIVATE_KEY) throw new Error("PRIVATE_KEY missing. Run: node --env-file=.env scripts/deploy.mjs");
@@ -71,6 +71,7 @@ function argsOf(cfg) {
 // account nonce did not move (proves the attempt never reached the node).
 async function broadcastSafe(cfg) {
   const txData = encodeDeployTxData(code, argsOf(cfg));
+  console.log(`  ${cfg.name}: contract ${code.length} bytes, AddTransaction txData ${(txData.length - 2) / 2} bytes`);
   for (let attempt = 1; attempt <= 5; attempt++) {
     const n0 = await rpc("eth_getTransactionCount", [account.address, "latest"]);
     try {
@@ -81,7 +82,8 @@ async function broadcastSafe(cfg) {
     } catch (e) {
       const msg = e?.message || String(e);
       const n1 = await rpc("eth_getTransactionCount", [account.address, "latest"]).catch(() => "?");
-      console.log(`  ${cfg.name} deploy attempt ${attempt} failed (${msg.slice(0, 90)}), nonce ${n0} -> ${n1}`);
+      console.log(`  ${cfg.name} deploy attempt ${attempt} failed, nonce ${n0} -> ${n1}`);
+      dumpError(`deploy attempt ${attempt}`, e);
       if (String(n1) !== String(n0)) throw new Error("deploy may have broadcast (nonce moved) — aborting to avoid double deploy");
       if (attempt === 5) throw e;
       await sleep(15000);
@@ -127,7 +129,7 @@ async function deployOne(cfg) {
     console.log(`${cfg.name}: already deployed at ${state[cfg.name].address}`);
     return state[cfg.name];
   }
-  // resume: a tx was already broadcast — poll it instead of re-deploying
+  // resume: a GenLayer tx was already broadcast — poll it instead of re-deploying
   if (state[cfg.name]?.txHash) {
     console.log(`${cfg.name}: resuming pending deploy tx ${state[cfg.name].txHash}`);
     const settled = await settle(cfg, state[cfg.name].txHash).catch((e) => {
@@ -139,11 +141,32 @@ async function deployOne(cfg) {
     delete state[cfg.name];
     saveState();
   }
+  if (state[cfg.name]?.evmTxHash) {
+    // AddTransaction was broadcast but not mined last time — watch the EVM tx
+    console.log(`${cfg.name}: resuming unmined AddTransaction EVM tx ${state[cfg.name].evmTxHash}`);
+    const rec = await (async () => {
+      for (let i = 0; i < 100; i++) {
+        const r = await rpc("eth_getTransactionReceipt", [state[cfg.name].evmTxHash]).catch(() => null);
+        if (r) return r;
+        await sleep(6000);
+      }
+      return null;
+    })();
+    if (!rec) throw new Error(`${cfg.name}: AddTransaction EVM tx still unmined — network refuses the payload; see docs/evidence/v2/deploy-path-matrix.md`);
+    if (String(rec.status) !== "0x1") throw new Error(`${cfg.name}: AddTransaction EVM tx reverted on-chain: ${state[cfg.name].evmTxHash}`);
+    delete state[cfg.name];
+    saveState();
+    console.log(`${cfg.name}: EVM tx mined but GenLayer tx id was not captured — re-broadcasting is required; ` +
+      "NOTE: if this repeats, the deploy will double-spend; inspect the mined tx logs manually.");
+    // fall through to a fresh broadcast — resume of an untracked mined tx cannot
+    // recover the GenLayer tx id, but this path should be unreachable in practice
+  }
   console.log(`Deploying registry_v2 (${cfg.name})...`);
-  const { genTxId } = await broadcastSafe(cfg);
-  console.log("  deploy genTxId:", genTxId);
-  state[cfg.name] = { txHash: String(genTxId) };
+  const { genTxId, evmHash } = await broadcastSafe(cfg);
+  console.log("  deploy genTxId:", genTxId, "| evm tx:", evmHash);
+  state[cfg.name] = genTxId ? { txHash: String(genTxId) } : { evmTxHash: String(evmHash), note: "AddTransaction broadcast but not mined yet — rerun resumes by polling this EVM hash" };
   saveState(); // persist BEFORE waiting: a rerun resumes instead of double-deploying
+  if (!genTxId) throw new Error(`${cfg.name}: AddTransaction not mined in time; rerun to resume (state has evmTxHash)`);
   const settled = await settle(cfg, genTxId);
   if (!settled) throw new Error(`${cfg.name}: deploy tx dropped from queue; re-run to retry`);
   return settled;

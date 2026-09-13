@@ -47,6 +47,21 @@ export function rawRpc(client) {
   };
 }
 
+// Full diagnostic dump for an RPC/transport error: CI logs must be enough to
+// understand a failure without local access (no silently swallowed errors).
+export function dumpError(label, e) {
+  console.log(`  [${label}]`);
+  console.log("    name:", e?.name, "| code:", e?.code);
+  for (const k of ["message", "shortMessage", "details", "data"]) {
+    if (e?.[k]) console.log(`    ${k}:`, String(e[k]).slice(0, 300));
+  }
+  const cause = e?.cause;
+  if (cause) {
+    console.log("    cause:", String(cause?.message || cause).slice(0, 300), cause?.code ? `(code ${cause.code})` : "");
+    if (cause?.cause) console.log("    cause.cause:", String(cause.cause?.message || cause.cause).slice(0, 200));
+  }
+}
+
 function extractTxId(logs) {
   for (const [abi, name] of [[NEW_TX_EVENT, "NewTransaction"], [CREATED_TX_EVENT, "CreatedTransaction"]]) {
     try {
@@ -70,12 +85,14 @@ export async function broadcastAddTransaction(client, account, { recipient, txDa
     const data = useV6
       ? encodeAddTransactionV6({ sender: account.address, recipient, txData, validators, maxRotations, validUntil })
       : encodeAddTransactionV5({ sender: account.address, recipient, txData, validators, maxRotations });
+    console.log(`  AddTransaction ${useV6 ? "V6" : "V5"}: calldata ${(data.length - 2) / 2} bytes`);
     let gas = 2_000_000n;
     try {
       const est = await rpc("eth_estimateGas", [{ from: account.address, to: CONSENSUS_MAIN, data }]);
       gas = (BigInt(est) * 12n) / 10n + 10_000n;
     } catch (e) {
-      console.log("  gas estimation failed, using default 2M:", String(e?.details || e?.message).slice(0, 90));
+      console.log("  gas estimation failed, using default 2M:");
+      dumpError("estimateGas", e);
     }
     // nonce conflicts happen when earlier queued txs are still mining;
     // a conflicted tx is rejected by the node, so re-signing is safe
@@ -88,7 +105,10 @@ export async function broadcastAddTransaction(client, account, { recipient, txDa
         return { evmHash, nonce };
       } catch (e) {
         const msg = String(e?.details || e?.message || e);
-        if (!/nonce is not consistent|nonce too|replacement transaction|already known/i.test(msg)) throw e;
+        if (!/nonce is not consistent|nonce too|replacement transaction|already known/i.test(msg)) {
+          dumpError("sendRawTransaction", e);
+          throw e;
+        }
         console.log("  nonce conflict (" + msg.slice(-70) + "), re-reading nonce");
         await sleep(2000);
       }
@@ -123,7 +143,8 @@ export async function broadcastAddTransaction(client, account, { recipient, txDa
     // V5 fallback only makes sense before anything was broadcast; an EVM revert
     // already proves V6 was processed, so only non-revert transport errors retry.
     if (/reverted/i.test(msg)) throw e;
-    console.log("  V6 attempt failed (" + msg.slice(0, 90) + "), trying V5 fallback");
+    console.log("  V6 attempt failed, trying V5 fallback:");
+    dumpError("V6 attempt", e);
     const { evmHash } = await attempt(false);
     const receipt = await mineReceipt(evmHash);
     if (!receipt) return { evmHash, genTxId: null, pending: true };
