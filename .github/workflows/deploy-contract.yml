@@ -34,12 +34,10 @@ jobs:
           fi
           node scripts/diagnostics/env-report.mjs
           node scripts/diagnostics/preflight.mjs
-      - name: Restore deploy state
-        uses: actions/download-artifact@v4
-        with:
-          name: deploy-state
-          path: .
-        continue-on-error: true
+      # deploy-state.json is committed by the workflow below, so a fresh run
+      # already restores the latest resumable state through checkout. Do not
+      # require an artifact from a previous run (it may have expired or never
+      # existed on the first run).
       - name: Deploy prod + demo
         env:
           PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
