@@ -89,6 +89,10 @@ node --env-file=.env scripts/deploy.mjs       # prod + demo -> deployments.json
 node --env-file=.env scripts/proofs-v2.mjs    # resumable proof suite -> docs/evidence/v2/
 ```
 
+### Reproducible public demo release
+
+The repository includes manual GitHub Actions workflows for the network-dependent release path. Add a funded Bradbury key as the repository secret `PRIVATE_KEY`, run **Deploy contract (manual)**, and review the resulting addresses in `deployments.json`. The deployment workflow never stores the key; it commits only public deployment metadata and uploads resumable state. Once `deployments.json` contains `prod.address`, **Deploy dApp to GitHub Pages** injects that address into `NEXT_PUBLIC_REGISTRY_ADDRESS` at build time. If the v2 contract is not deployed yet, Pages still publishes the UI but labels it **Deployment pending** instead of silently presenting an empty live dashboard. The same web build can be run locally with `NEXT_PUBLIC_REGISTRY_ADDRESS=<Bradbury address> npm run build` from `apps/web`.
+
 ## Documentation
 
 - [docs/MILESTONE-v2.md](docs/MILESTONE-v2.md) — delta vs accepted v1.2 with verification pointers

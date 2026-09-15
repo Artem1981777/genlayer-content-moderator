@@ -28,6 +28,19 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           cd apps/web && npm install --no-audit --no-fund
+      - name: Resolve deployed registry address
+        run: |
+          if [ -f deployments.json ]; then
+            ADDRESS="$(node -e 'const d=require("./deployments.json"); process.stdout.write(d.prod?.address || "")')"
+          else
+            ADDRESS=""
+          fi
+          if [ -n "$ADDRESS" ]; then
+            echo "NEXT_PUBLIC_REGISTRY_ADDRESS=$ADDRESS" >> "$GITHUB_ENV"
+            echo "Using deployed v2 registry: $ADDRESS"
+          else
+            echo "::warning::deployments.json has no prod address; publishing the UI in deployment-pending mode"
+          fi
       - name: Build static export
         run: npm run build
         working-directory: apps/web

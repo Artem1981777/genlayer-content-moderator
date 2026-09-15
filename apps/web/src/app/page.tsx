@@ -1,7 +1,7 @@
 "use client";
 
 import { Shell } from "@/components/shell";
-import { useStats, useConfig } from "@/lib/registry";
+import { CONTRACT_ADDRESS, useStats, useConfig } from "@/lib/registry";
 import { KpiCards, short } from "@/components/registry-ui";
 import Link from "next/link";
 import { ArrowRight, Gavel, Landmark, ShieldCheck } from "lucide-react";
@@ -62,6 +62,17 @@ export default function Home() {
       <section className="py-6">
         <KpiCards stats={stats} />
       </section>
+
+      {!CONTRACT_ADDRESS && (
+        <section className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+          <p className="mono font-medium uppercase tracking-wide">Deployment pending</p>
+          <p className="mt-1 max-w-2xl leading-relaxed">
+            The v2 registry has not been deployed for this build yet. The UI is available for review,
+            but live Bradbury reads and wallet actions will appear automatically after the deployment
+            workflow publishes a <span className="mono">deployments.json</span> address.
+          </p>
+        </section>
+      )}
 
       <section className="grid gap-4 py-8 md:grid-cols-3">
         {HOW.map((h) => (

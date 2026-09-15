@@ -4,7 +4,7 @@
 // Run: node scripts/diagnostics/env-report.mjs  (PRIVATE_KEY from env)
 import { createClient, createAccount } from "genlayer-js";
 import { testnetBradbury } from "genlayer-js/chains";
-import { CONSENSUS_MAIN } from "../lib/txbuild.mjs";
+import { CONSENSUS_MAIN } from "../lib/config.mjs";
 
 if (!process.env.PRIVATE_KEY) {
   console.error("PRIVATE_KEY is not set (GitHub secret or .env)");
