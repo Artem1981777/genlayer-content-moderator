@@ -9,6 +9,15 @@ name: Deploy contract (manual)
 # the run fails honestly and resumes when the network lifts the limit.
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: "Deployment target"
+        required: true
+        default: "full"
+        type: choice
+        options:
+          - full
+          - lite
 
 permissions:
   contents: write
@@ -39,9 +48,15 @@ jobs:
       # require an artifact from a previous run (it may have expired or never
       # existed on the first run).
       - name: Deploy prod + demo
+        if: inputs.target == 'full'
         env:
           PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
         run: node scripts/deploy.mjs
+      - name: Deploy lightweight demo
+        if: inputs.target == 'lite'
+        env:
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+        run: node scripts/deploy-lite.mjs
       - name: Upload deploy state
         if: always()
         uses: actions/upload-artifact@v4
@@ -50,11 +65,12 @@ jobs:
           path: |
             deploy-state.json
             deployments.json
+            lite-deploy-state.json
           if-no-files-found: ignore
       - name: Commit artifacts
         if: always()
         run: |
           git config user.name "deploy-bot"
           git config user.email "deploy-bot@users.noreply.github.com"
-          git add deployments.json deploy-state.json 2>/dev/null || true
-          git diff --cached --quiet || (git commit -m "chore: registry_v2 deployment artifacts [skip ci]" && git push)
+          git add deployments.json deploy-state.json lite-deploy-state.json 2>/dev/null || true
+          git diff --cached --quiet || (git commit -m "chore: deployment artifacts [skip ci]" && git push)
