@@ -11,6 +11,7 @@ const client = createClient({ chain: testnetBradbury, account });
 const rules = "No spam, scams, phishing, hate, harassment, violence, or threats. APPROVE compliant content, FLAG borderline content, REMOVE clear violations.";
 const candidates = [
   { name: "v2-full", file: "contracts/registry_v2.py", args: [rules, 1_000_000_000_000n, 1_000_000_000_000n, 2_000_000_000_000n, 86400n, 3600n, 172800n, 60n, 3, 2] },
+  { name: "v2-lite", file: "contracts/moderator_lite.py", args: [rules] },
   { name: "v1.2-registry", file: "contracts/registry.py", args: [rules] },
   { name: "v0.5-moderator", file: "contracts/moderator.py", args: [rules] },
 ];
